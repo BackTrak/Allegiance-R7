@@ -8129,7 +8129,7 @@ public:
                                         js.controls.jsValues[c_axisPitch] *= maxSlewRate / pitch;
                                 }
                                 {
-                                    float               yaw = pht->GetMaxTurnRate(c_axisPitch);
+                                    float               yaw = pht->GetMaxTurnRate(c_axisYaw);
                                     
                                     if (yaw > maxSlewRate)
                                         js.controls.jsValues[c_axisYaw] *= maxSlewRate / yaw;

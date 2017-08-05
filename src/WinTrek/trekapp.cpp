@@ -2,6 +2,10 @@
 #include <objbase.h>
 #include <malloc.h>
 
+// BT - STEAM
+#include "atlenc.h"
+#include <inttypes.h>
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // Include the main function
@@ -11,9 +15,9 @@
 #include "main.h"
 #include "regkey.h"
 
-// BUILD_DX9
+#ifdef BUILD_DX9
 #include "VideoSettingsDX9.h"
-// BUILD_DX9
+#endif //BUILD_DX9
 
 extern bool g_bEnableSound = true;
 extern bool bStartTraining   = false;
@@ -271,8 +275,47 @@ bool CheckForAllGuard()
   return false;
 }
 
+// Leftovers from ACSS, this can be removed after 1/1/2018.
 ZString ReadAuthPipe()
 {
+	// BT - STEAM
+
+	//// Get the current users Steam name.
+	//const char *name = SteamFriends()->GetPersonaName();
+	//CSteamID id = SteamUser()->GetSteamID();
+	//uint64 uid = id.ConvertToUint64();
+
+	//CSteamID testID = CSteamID(uid);
+	//bool isTestIDValid = testID.IsValid();
+	//	
+	//char rgchToken[1024];
+	//uint32 unTokenLen = 0;
+	//HAuthTicket m_hAuthTicket = SteamUser()->GetAuthSessionTicket(rgchToken, sizeof(rgchToken), &unTokenLen);
+	////msg.SetToken(rgchToken, unTokenLen);
+
+	//char uuencodebuffer[2064];
+	//int uuencodebufferLen = sizeof(uuencodebuffer);
+	//UUEncode((BYTE *)rgchToken, unTokenLen, uuencodebuffer, &uuencodebufferLen);
+	//
+	//uuencodebuffer[uuencodebufferLen] = '\0';
+
+	//char cdKey[2100];
+	//sprintf(cdKey, "%" PRIu64 ":%s", uid, uuencodebuffer);
+
+	//char testDecodeValue[1024];
+	//int testDecodeValueLen = sizeof(testDecodeValue);
+	//UUDecode((BYTE *)uuencodebuffer, uuencodebufferLen, (BYTE *)testDecodeValue, &testDecodeValueLen);
+
+	//for (int i = 0; i < unTokenLen; i++)
+	//{
+	//	if (testDecodeValue[i] != rgchToken[i])
+	//		OutputDebugString("FAIL!\n");
+	//}
+
+	//// This is the combo of the user's CSteamID:AuthToken. It will need to be parsed by the lobby and the server.
+	//return ZString(cdKey);
+
+	
 	const int LENGTH = 64;
 	HANDLE hWrite;
 	DWORD nDataLength;
@@ -320,6 +363,14 @@ public:
     {
         _controlfp(_PC_53, _MCW_PC);
 
+		// BT - STEAM
+		bool steamInitResult = SteamAPI_Init();
+		if (steamInitResult == false)
+		{
+			::MessageBox(NULL, "Steam did not init.", "Error", MB_ICONERROR | MB_OK);
+		}
+		
+		
         //
         // Make sure reloader finished correctly--this must be first before any other files are opened
         //
@@ -421,10 +472,10 @@ public:
         // Fix success HRESULT
         hr = S_OK;
 
-// BUILD_DX9
+#ifndef BUILD_DX9
 		// For the D3D build, move this to after the window has been created, as we need a valid HWND to create the device.
-//		EffectApp::Initialize(strCommandLine);
-// BUILD_DX9
+		EffectApp::Initialize(strCommandLine);
+#endif // BUILD_DX9
 
         //
         // get the artpath
@@ -437,6 +488,7 @@ public:
         char  szValue[MAX_PATH];
         DWORD dwValue;
         DWORD cbValue = MAX_PATH;
+		DWORD dwSoftwareHudPreference = 0;
 
         // NOTE: please keep reloader.cpp's GetArtPath() in sync with this!!!
         if (ERROR_SUCCESS == ::RegOpenKeyEx(HKEY_LOCAL_MACHINE, ALLEGIANCE_REGISTRY_KEY_ROOT, 0, KEY_READ, &hKey))
@@ -513,6 +565,12 @@ public:
                 }
             }
 
+			cbValue = MAX_PATH;
+			if (ERROR_SUCCESS == ::RegQueryValueEx(hKey, "SoftwareHUD", NULL, &dwType, (unsigned char*)&dwValue, &cbValue))
+			{
+				dwSoftwareHudPreference = dwValue;
+			}
+
             ::RegCloseKey(hKey);
         }
 
@@ -532,17 +590,15 @@ public:
             pathStr = logFileName;
         }
 		
-		//Imago 8/16/09
-		ZVersionInfo vi;
-		debugf("Running %s %s\nArtpath: %s\nCommand line: %s\n", (PCC) vi.GetInternalName(), 
-			(PCC) vi.GetStringValue("FileVersion"),(PCC) pathStr, (PCC) strCommandLine);
-
-// BUILD_DX9
+#ifndef BUILD_DX9
 		// Now set later for D3D build, as modeller isn't valid yet.
-		//GetModeler()->SetArtPath(pathStr);
-// BUILD_DX9
+		GetModeler()->SetArtPath(pathStr);
+#endif // BUILD_DX9
  		UTL::SetArtPath(pathStr);
-		
+
+		GetModeler()->BuildHudList();
+		GetModeler()->SetStyleHud(dwSoftwareHudPreference);
+
 		/*{
 			HRESULT hr = FirstRunEula(pathStr);
 		
@@ -563,13 +619,13 @@ public:
           }
         }*/
 
-// BUILD_DX9
+#ifndef BUILD_DX9
         //
         // load the fonts
         //
 
-//        TrekResources::Initialize(GetModeler());
-// BUILD_DX9
+        TrekResources::Initialize(GetModeler());
+#endif // BUILD_DX9
 
         //
         // Initialize the runtime
@@ -682,8 +738,17 @@ public:
             if (token.IsString(str)){} ;
             }
 
+		// BT - STEAM
 		//Orion - 2009 ACSS : check the alleg pipe for the auth token
-		trekClient.SetCDKey(ReadAuthPipe());
+		//trekClient.SetCDKey(ReadAuthPipe());
+
+		// BT - STEAM
+		if (SteamUser() != nullptr && SteamUser()->BLoggedOn() == true)
+		{
+			// STEAM - TODO: Figure out how to get the primary clan and get the clan tag. 
+			trekClient.SaveCharacterName(SteamFriends()->GetPersonaName());
+
+		}
 
         // 
         // Check for other running copies of the app
@@ -723,18 +788,13 @@ public:
         // Create the window
         //
 
-// BUILD_DX9
-		// Ask the user for video settings. -- 
-		//   -adapter switch added for the needy
-		//   Raise dialog only if "Safe Mode" activated (any software/primary/secondary switches sent) 
-		// imago 6/29/09 7/1/09 removed hardware, asgs sends this under normal conditions
-		bool bRaise = (bSoftware || bPrimary || bSecondary) ? true : false;
-		if( PromptUserForVideoSettings(bStartFullscreen, bRaise, iUseAdapter, GetModuleHandle(NULL), pathStr , ALLEGIANCE_REGISTRY_KEY_ROOT) == false )
+#ifdef BUILD_DX9
+		// Ask the user for video settings.
+		if( PromptUserForVideoSettings( GetModuleHandle(NULL), pathStr ) == false )
 		{
 			return E_FAIL;
 		}
-
-		CD3DDevice9::Get()->UpdateCurrentMode( );
+		CD3DDevice9::UpdateCurrentMode( );
 	
         TRef<TrekWindow> pwindow = 
             TrekWindow::Create(
@@ -747,18 +807,18 @@ public:
                 bPrimary,
                 bSecondary
             );
-// #else
-        //TRef<TrekWindow> pwindow = 
-        //    TrekWindow::Create(
-        //        this, 
-        //        strCommandLine,
-        //        bMovies,
-        //        bSoftware,
-        //        bHardware,
-        //        bPrimary,
-        //        bSecondary
-        //    );
-// BUILD_DX9
+#else
+        TRef<TrekWindow> pwindow = 
+            TrekWindow::Create(
+                this, 
+                strCommandLine,
+                bMovies,
+                bSoftware,
+                bHardware,
+                bPrimary,
+                bSecondary
+            );
+#endif // BUILD_DX9
 
         if (!pwindow->IsValid()) {
             return E_FAIL;

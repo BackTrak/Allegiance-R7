@@ -589,6 +589,13 @@ void ChatInfo::SetChat(ChatTarget       ctRecipient,
 
 	logchat(strText);  // mmf added log chat
 
+	//Turkey #357/#360 06/13 add system time
+	char buff[9];
+	time_t t = time(0);
+	tm* local_tm = localtime(&t);
+	sprintf_s(buff, 9, "[%02d:%02d] ", local_tm->tm_hour, local_tm->tm_min);
+	m_strTimestamp = buff;
+
     m_ctRecipient = ctRecipient;
 
     m_cidCommand = cid;
@@ -1102,6 +1109,8 @@ BaseClient::BaseClient(void)
     m_lobbyServerOffset(0),
     m_plistFindServerResults(NULL),
     m_strCDKey(""),
+	m_launcherPID(0),
+	m_lastLauncherCheck(Time::Now()),
 	// KGJV pigs - extra default init
 	m_sidBoardAfterDisembark(NA),
 	m_sidTeleportAfterDisembark(NA)

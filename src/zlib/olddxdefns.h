@@ -20,7 +20,7 @@ typedef DWORD D3DCOLOR;
 #define RGB_GETGREEN(rgb)       (((rgb) >> 8) & 0xff)
 #define RGB_GETBLUE(rgb)        ((rgb) & 0xff)
 #define RGBA_SETALPHA(rgba, x) (((x) << 24) | ((rgba) & 0x00ffffff))
-#define RGB_MAKE(r, g, b)       ((D3DCOLOR) (((r) << 16) | ((g) << 8) | (b)))
+//#define RGB_MAKE(r, g, b)       ((D3DCOLOR) (((r) << 16) | ((g) << 8) | (b)))
 #define RGBA_TORGB(rgba)       ((D3DCOLOR) ((rgba) & 0xffffff))
 #define RGB_TORGBA(rgb)        ((D3DCOLOR) ((rgb) | 0xff000000))
 
@@ -93,155 +93,155 @@ typedef struct _D3DVECTOR {
  * Homogeneous vertices
  */
 
-typedef struct _D3DHVERTEX {
-    DWORD           dwFlags;        /* Homogeneous clipping flags */
-    union {
-    D3DVALUE    hx;
-    D3DVALUE    dvHX;
-    };
-    union {
-    D3DVALUE    hy;
-    D3DVALUE    dvHY;
-    };
-    union {
-    D3DVALUE    hz;
-    D3DVALUE    dvHZ;
-    };
-} D3DHVERTEX, *LPD3DHVERTEX;
-
-/*
- * Transformed/lit vertices
- */
-typedef struct _D3DTLVERTEX {
-    union {
-    D3DVALUE    sx;             /* Screen coordinates */
-    D3DVALUE    dvSX;
-    };
-    union {
-    D3DVALUE    sy;
-    D3DVALUE    dvSY;
-    };
-    union {
-    D3DVALUE    sz;
-    D3DVALUE    dvSZ;
-    };
-    union {
-    D3DVALUE    rhw;        /* Reciprocal of homogeneous w */
-    D3DVALUE    dvRHW;
-    };
-    union {
-    D3DCOLOR    color;          /* Vertex color */
-    D3DCOLOR    dcColor;
-    };
-    union {
-    D3DCOLOR    specular;       /* Specular component of vertex */
-    D3DCOLOR    dcSpecular;
-    };
-    union {
-    D3DVALUE    tu;             /* Texture coordinates */
-    D3DVALUE    dvTU;
-    };
-    union {
-    D3DVALUE    tv;
-    D3DVALUE    dvTV;
-    };
-    _D3DTLVERTEX() { };
-	_D3DTLVERTEX(const D3DVECTOR& v, float _rhw,
-                 D3DCOLOR _color, D3DCOLOR _specular,
-                 float _tu, float _tv)
-        { sx = v.x; sy = v.y; sz = v.z; rhw = _rhw;
-          color = _color; specular = _specular;
-          tu = _tu; tv = _tv;
-        }
-} D3DTLVERTEX, *LPD3DTLVERTEX;
-
-/*
- * Untransformed/lit vertices
- */
-typedef struct _D3DLVERTEX {
-    union {
-    D3DVALUE     x;             /* Homogeneous coordinates */
-    D3DVALUE     dvX;
-    };
-    union {
-    D3DVALUE     y;
-    D3DVALUE     dvY;
-    };
-    union {
-    D3DVALUE     z;
-    D3DVALUE     dvZ;
-    };
-    DWORD            dwReserved;
-    union {
-    D3DCOLOR     color;         /* Vertex color */
-    D3DCOLOR     dcColor;
-    };
-    union {
-    D3DCOLOR     specular;      /* Specular component of vertex */
-    D3DCOLOR     dcSpecular;
-    };
-    union {
-    D3DVALUE     tu;            /* Texture coordinates */
-    D3DVALUE     dvTU;
-    };
-    union {
-    D3DVALUE     tv;
-    D3DVALUE     dvTV;
-    };
-    _D3DLVERTEX() { }
-    _D3DLVERTEX(const D3DVECTOR& v,
-                D3DCOLOR _color, D3DCOLOR _specular,
-                float _tu, float _tv)
-        { x = v.x; y = v.y; z = v.z; dwReserved = 0;
-          color = _color; specular = _specular;
-          tu = _tu; tv = _tv;
-        }
-} D3DLVERTEX, *LPD3DLVERTEX;
-
-/*
- * Untransformed/unlit vertices
- */
-
-typedef struct _D3DVERTEX {
-    union {
-    D3DVALUE     x;             /* Homogeneous coordinates */
-    D3DVALUE     dvX;
-    };
-    union {
-    D3DVALUE     y;
-    D3DVALUE     dvY;
-    };
-    union {
-    D3DVALUE     z;
-    D3DVALUE     dvZ;
-    };
-    union {
-    D3DVALUE     nx;            /* Normal */
-    D3DVALUE     dvNX;
-    };
-    union {
-    D3DVALUE     ny;
-    D3DVALUE     dvNY;
-    };
-    union {
-    D3DVALUE     nz;
-    D3DVALUE     dvNZ;
-    };
-    union {
-    D3DVALUE     tu;            /* Texture coordinates */
-    D3DVALUE     dvTU;
-    };
-    union {
-    D3DVALUE     tv;
-    D3DVALUE     dvTV;
-    };
-    _D3DVERTEX() { }
-    _D3DVERTEX(const D3DVECTOR& v, const D3DVECTOR& n, float _tu, float _tv)
-        { x = v.x; y = v.y; z = v.z;
-          nx = n.x; ny = n.y; nz = n.z;
-          tu = _tu; tv = _tv;
-        }
-} D3DVERTEX, *LPD3DVERTEX;
+//typedef struct _D3DHVERTEX {
+//    DWORD           dwFlags;        /* Homogeneous clipping flags */
+//    union {
+//    D3DVALUE    hx;
+//    D3DVALUE    dvHX;
+//    };
+//    union {
+//    D3DVALUE    hy;
+//    D3DVALUE    dvHY;
+//    };
+//    union {
+//    D3DVALUE    hz;
+//    D3DVALUE    dvHZ;
+//    };
+//} D3DHVERTEX, *LPD3DHVERTEX;
+//
+///*
+// * Transformed/lit vertices
+// */
+//typedef struct _D3DTLVERTEX {
+//    union {
+//    D3DVALUE    sx;             /* Screen coordinates */
+//    D3DVALUE    dvSX;
+//    };
+//    union {
+//    D3DVALUE    sy;
+//    D3DVALUE    dvSY;
+//    };
+//    union {
+//    D3DVALUE    sz;
+//    D3DVALUE    dvSZ;
+//    };
+//    union {
+//    D3DVALUE    rhw;        /* Reciprocal of homogeneous w */
+//    D3DVALUE    dvRHW;
+//    };
+//    union {
+//    D3DCOLOR    color;          /* Vertex color */
+//    D3DCOLOR    dcColor;
+//    };
+//    union {
+//    D3DCOLOR    specular;       /* Specular component of vertex */
+//    D3DCOLOR    dcSpecular;
+//    };
+//    union {
+//    D3DVALUE    tu;             /* Texture coordinates */
+//    D3DVALUE    dvTU;
+//    };
+//    union {
+//    D3DVALUE    tv;
+//    D3DVALUE    dvTV;
+//    };
+//    _D3DTLVERTEX() { };
+//	_D3DTLVERTEX(const D3DVECTOR& v, float _rhw,
+//                 D3DCOLOR _color, D3DCOLOR _specular,
+//                 float _tu, float _tv)
+//        { sx = v.x; sy = v.y; sz = v.z; rhw = _rhw;
+//          color = _color; specular = _specular;
+//          tu = _tu; tv = _tv;
+//        }
+//} D3DTLVERTEX, *LPD3DTLVERTEX;
+//
+///*
+// * Untransformed/lit vertices
+// */
+//typedef struct _D3DLVERTEX {
+//    union {
+//    D3DVALUE     x;             /* Homogeneous coordinates */
+//    D3DVALUE     dvX;
+//    };
+//    union {
+//    D3DVALUE     y;
+//    D3DVALUE     dvY;
+//    };
+//    union {
+//    D3DVALUE     z;
+//    D3DVALUE     dvZ;
+//    };
+//    DWORD            dwReserved;
+//    union {
+//    D3DCOLOR     color;         /* Vertex color */
+//    D3DCOLOR     dcColor;
+//    };
+//    union {
+//    D3DCOLOR     specular;      /* Specular component of vertex */
+//    D3DCOLOR     dcSpecular;
+//    };
+//    union {
+//    D3DVALUE     tu;            /* Texture coordinates */
+//    D3DVALUE     dvTU;
+//    };
+//    union {
+//    D3DVALUE     tv;
+//    D3DVALUE     dvTV;
+//    };
+//    _D3DLVERTEX() { }
+//    _D3DLVERTEX(const D3DVECTOR& v,
+//                D3DCOLOR _color, D3DCOLOR _specular,
+//                float _tu, float _tv)
+//        { x = v.x; y = v.y; z = v.z; dwReserved = 0;
+//          color = _color; specular = _specular;
+//          tu = _tu; tv = _tv;
+//        }
+//} D3DLVERTEX, *LPD3DLVERTEX;
+//
+///*
+// * Untransformed/unlit vertices
+// */
+//
+//typedef struct _D3DVERTEX {
+//    union {
+//    D3DVALUE     x;             /* Homogeneous coordinates */
+//    D3DVALUE     dvX;
+//    };
+//    union {
+//    D3DVALUE     y;
+//    D3DVALUE     dvY;
+//    };
+//    union {
+//    D3DVALUE     z;
+//    D3DVALUE     dvZ;
+//    };
+//    union {
+//    D3DVALUE     nx;            /* Normal */
+//    D3DVALUE     dvNX;
+//    };
+//    union {
+//    D3DVALUE     ny;
+//    D3DVALUE     dvNY;
+//    };
+//    union {
+//    D3DVALUE     nz;
+//    D3DVALUE     dvNZ;
+//    };
+//    union {
+//    D3DVALUE     tu;            /* Texture coordinates */
+//    D3DVALUE     dvTU;
+//    };
+//    union {
+//    D3DVALUE     tv;
+//    D3DVALUE     dvTV;
+//    };
+//    _D3DVERTEX() { }
+//    _D3DVERTEX(const D3DVECTOR& v, const D3DVECTOR& n, float _tu, float _tv)
+//        { x = v.x; y = v.y; z = v.z;
+//          nx = n.x; ny = n.y; nz = n.z;
+//          tu = _tu; tv = _tv;
+//        }
+//} D3DVERTEX, *LPD3DVERTEX;
 
 #define D3DFVF_RESERVED1        0x020
 

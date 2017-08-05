@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "dinput.h"
+#include "LogFile.h"
+#include "zreg.h"
+#include "regkey.h"
 
 #define SAFE_DELETE(p)       { if(p) { delete (p);     (p)=NULL; } }
 #define SAFE_RELEASE(p)      { if(p) { (p)->Release(); (p)=NULL; } }
@@ -313,7 +316,7 @@ public:
         {
             ::RegQueryValueEx(hKey, "MouseSensitivity", NULL, &dwType, (unsigned char*)&szValue, &cbValue);
 
-            m_sensitivity = (float)(strlen(szValue) >= 1 && strcmp(szValue,"0") == -1) ?  atof(szValue) : 1.0f;
+            m_sensitivity = (float)(strlen(szValue) >= 1 && strcmp(szValue,"0") == -1) ? (float) atof(szValue) : 1.0f;
 
             ::RegQueryValueEx(hKey, "MouseAcceleration", NULL, &dwType, (unsigned char*)&dwValue, &cwValue);
             ::RegCloseKey(hKey);

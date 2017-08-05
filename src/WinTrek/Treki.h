@@ -71,9 +71,9 @@ public:
     static TRef<TrekWindow> Create(
         EffectApp*     papp, 
         const ZString& strCommandLine, 
-// BUILD_DX9
+#ifdef BUILD_DX9
 		const ZString& strArtPath,					// Added for DX9 build, due to reordered startup.
-// BUILD_DX9
+#endif //BUILD_DX9
         bool           bMovies,
         bool           bSoftware,
         bool           bHardware,
@@ -86,6 +86,7 @@ public:
     virtual TRef<AnimatedImage> LoadAnimatedImage(Number* ptime, const ZString& str) = 0;
 
     virtual void             UpdateGameStateContainer() = 0;
+	virtual void			 InitializeGameStateContainer() = 0;
 
     virtual Camera*             GetCamera()             = 0;
     virtual Orientation         GetCameraOrientation()  = 0;
@@ -102,8 +103,10 @@ public:
 
     virtual float            GetDeltaTime (void) const = 0;
 
-    virtual float            GetHUDStyle (void) const = 0;
-    virtual void             SetHUDStyle (float newStyle) = 0;
+	virtual bool			 IsShowingTimestamp(void) const = 0; // #360 tests for whether the timestamp should show
+
+    virtual int              GetHUDStyle (void) = 0;
+    virtual void             SetHUDStyle (int newStyle) = 0;
 
 
     enum CameraMode

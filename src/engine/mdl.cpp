@@ -1025,12 +1025,18 @@ public:
     bool ReadDefinition(INameSpace* pns, bool bError)
     {
         ZString strIdentifier;
-
+		ZString strTarget = "CenterHudDisplay";
+		
         if (m_ptoken->Is(m_ptoken->Struct, false)) {
             return ReadStruct(pns, true);
         } else if (m_ptoken->IsSymbol(strIdentifier, bError)) {
             if (g_bMDLLog) {
+
 			    ZDebugOutput("Reading identifier: " + strIdentifier + "\n");
+
+				int find = strIdentifier.Find(strTarget);
+				if (find == 0)
+					ZDebugOutput("Found target!");
             }
             if (m_ptoken->Is(m_ptoken->Equals, true)) {
                 TRef<IObject> pobject;

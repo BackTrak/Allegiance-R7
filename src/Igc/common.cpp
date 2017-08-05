@@ -48,6 +48,8 @@ const CommandData   c_cdAllCommands[c_cidMax] =
                         { "goto",       "acgotobmp",    "qugotobmp" },
                         { "repair",     "acrepairbmp",  "qurepairbmp" },
                         { "join",       "acjoinbmp",    "qujoinbmp" },
+						{ "stop",		"acstopbmp",	"qustopbmp" }, //#321
+						{ "hide",		"achidebmp",	"quhidebmp" }, //#320
                         { "mine",       "acminebmp",    "quminebmp" },
                         { "build",      "acbuildbmp",   "qubuildbmp" }
                     };

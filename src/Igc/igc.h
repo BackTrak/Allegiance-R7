@@ -869,10 +869,12 @@ const CommandID   c_cidPickup       =  4;
 const CommandID   c_cidGoto         =  5;
 const CommandID   c_cidRepair       =  6;
 const CommandID   c_cidJoin         =  7;
-const CommandID   c_cidMine         =  8;
-const CommandID   c_cidBuild        =  9;
+const CommandID   c_cidStop			=  8; //#321
+const CommandID   c_cidHide			=  9; //#320
+const CommandID   c_cidMine         =  10;
+const CommandID   c_cidBuild        =  11;
 
-const CommandID   c_cidMax = 10;
+const CommandID   c_cidMax = 12; //#321 increased from 10
 extern const CommandData   c_cdAllCommands[c_cidMax];
 
 struct GlobalAttributeSet
@@ -2595,6 +2597,7 @@ struct  DataStationIGC
     BytePercentage      bpHull;
     BytePercentage      bpShield;
     char                name[c_cbName];
+	StationTypeID		knownStationTypeID[c_cSidesMax]; //Turkey #307 02/31
 };
 
 struct  DataStationTypeIGC : public DataBuyableIGC
@@ -3483,7 +3486,10 @@ class IstationIGC : public IscannerIGC
 
 		virtual void SetRoidSide(SideID sid, bool bset = true) = 0;
 		virtual bool GetRoidSide(SideID sid) = 0;
-		//
+		
+		//Turkey #307 02/13
+		virtual void SetKnownStationType(SideID sid, IstationTypeIGC* pst) = 0;
+		virtual IstationTypeIGC* GetKnownStationType(SideID sid) = 0;
 
         virtual float                   GetShieldFraction(void) const = 0;
         virtual void                    SetShieldFraction(float sf) = 0;
@@ -4095,6 +4101,11 @@ class IasteroidIGC : public IdamageIGC
 		virtual void SetBuilderSeenSide(ObjectID oid) = 0;
 		virtual bool GetBuilderSeenSide(ObjectID oid) = 0;
 		virtual void SetInhibitUpdate(bool inhib) = 0; //Xynth #225 9/10
+
+		//Turkey #307 02/13
+		virtual void					Kill(SideID sid) = 0;
+		virtual bool					IsDead(void) = 0;
+		virtual bool					IsDead(SideID sid) = 0;
 };
 
 class IwarpIGC : public ImodelIGC
@@ -4285,6 +4296,7 @@ const AssetMask     c_amCarrier           = 0x800;
 const AssetMask     c_amEnemyTeleport     = 0x1000;
 const AssetMask     c_amEnemyTeleportShip = 0x2000;
 const AssetMask     c_amEnemyBomber       = 0x4000;
+const AssetMask		c_amEnemyProbe		  = 0x8000; //turkey #354 3/13 set when a warn probe is dropped
 
 typedef short   ClusterWarning;
 const ClusterWarning    c_cwNoThreat                = 0;
@@ -4518,6 +4530,9 @@ enum TargetType
     c_ttLeastTargeted = 0x10000,
     c_ttNoRipcord     = 0x20000,
     c_ttCowardly      = 0x40000,
+	c_ttPositiveBOP    = 0x80000, //Spunky #288
+	c_ttNoEye		   = 0x100000, //Spunky #288
+	c_ttCowardlyNeutOK = 0x200000, //Spunky  #293
 
     c_ttShipTypes   = c_ttShip | c_ttStation,
 
@@ -5167,7 +5182,6 @@ class   Waypoint
                                             Vector*             pvectorGoto,
                                             ImodelIGC**         ppmodelSkip,
                                             Vector*             pvectorFacing);
-
         ImodelIGC*  m_pmodelTarget;
 
         Objective   m_objective;

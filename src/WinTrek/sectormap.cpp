@@ -398,9 +398,14 @@ public:
     {
 		pcontext->SetBlendMode(BlendModeSourceAlpha); //Imago 7/15/09
 
+		//return;
+
         // draw the background
         Surface* psurfaceBackground = m_pimageBkgnd->GetSurface();
-        pcontext->DrawImage(psurfaceBackground);
+		pcontext->DrawImage(psurfaceBackground);
+
+		//return; 
+
 
         // set font
 
@@ -632,7 +637,7 @@ public:
         m_peventSinkTimer = IEventSink::CreateDelegate(this);
         //GetWindow()->GetTimer()->AddSink(m_peventSinkTimer, 1.0f);
 
-        m_rectMap = WinRect::Cast(m_pimageBkgnd->GetBounds().GetRect());
+		m_rectMap = WinRect::Cast(m_pimageBkgnd->GetBounds().GetRect());
 
         m_pimageSectorEmpty = pmodeler->LoadImage("sectoremptybmp", true);
         m_pimageOwnerHighlight = pmodeler->LoadImage("sectorownerbmp", true);
@@ -943,6 +948,8 @@ public:
 
     void Render(Context* pcontext)
     {
+		//return; 
+
         pcontext->SetShadeMode(ShadeModeFlat);
 		pcontext->SetBlendMode(BlendModeSourceAlpha); //imago 7/15/09
 

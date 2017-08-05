@@ -25,7 +25,7 @@ public:
 
 TRef<INameSpaceInfo> CreateNameSpaceInfo(INameSpace* pns, const ZString& str)
 {
-    return new NameSpaceInfo(pns, str); //Fix memory leak -Imago 8/2/09
+    return new NameSpaceInfo(pns, str);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -132,7 +132,7 @@ public:
         //     ok.
         //
 
-        #if defined(_DEBUG)
+        #if defined(_DEBUG) && !defined(DREAMCAST)
             Value* pvalue = dynamic_cast<Value*>(pobject);
 
             if (pvalue != NULL) {

@@ -12,7 +12,14 @@
 // 
 
 #include "pch.h"
- 
+
+// BT - STEAM
+//#include "lobbyapp.h"
+#include <inttypes.h>
+
+
+
+
 const DWORD CFLClient::c_dwID = 19680815;
 #ifndef NO_MSG_CRC
 bool g_fLogonCRC = true; 
@@ -83,9 +90,14 @@ static void doAuthentication(void* data, MprThread *threadp)
 
 	int resultMessageLength = 1024;
 	char resultMessage[1024];
-	bool succeeded = g_pLobbyApp->CDKeyIsValid(pqd->szCharacterName, pqd->szCDKey, szAddress, resultMessage, resultMessageLength);
+	char playerIdentifier[64];
+	ZString strPlayerIdentifier = g_pLobbyApp->GetPlayerIdentifierFromCDKeyString(pqd->szCDKey);
 	
-	printf("doAuthentication(): keycheck for: %s, key: %s, address: %s, result: %s, succeeded: %s\r\n", pqd->szCharacterName, pqd->szCDKey, szAddress, resultMessage, (succeeded == true) ? "true" : "false");
+	g_pLobbyApp->AddAuthorizingPlayerByPlayerIdentifier(strPlayerIdentifier, data);
+
+	bool succeeded = g_pLobbyApp->CDKeyIsValid(pqd->szCharacterName, pqd->szCDKey, szAddress, resultMessage, resultMessageLength, playerIdentifier);
+
+	printf("doAuthentication(): keycheck for: %s, playerIdentifier: %s, key: %s, address: %s, result: %s, succeeded: %s\r\n", pqd->szCharacterName, playerIdentifier, pqd->szCDKey, szAddress, resultMessage, (succeeded == true) ? "true" : "false");
 	
 	if(!succeeded)
 	{
@@ -95,11 +107,72 @@ static void doAuthentication(void* data, MprThread *threadp)
 		pqd->szReason = new char[lstrlen(resultMessage) + 1];
 		Strcpy(pqd->szReason,resultMessage);
 		mutex->unlock();
-	}
 
-	// tell the main thread we've finished, use the existing thread msg for AZ SQL 
-	PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM) NULL, (LPARAM) pQuery);
+		// tell the main thread we've finished, use the existing thread msg for AZ SQL 
+		PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM)NULL, (LPARAM)pQuery);
+	}
+	//else
+	//{
+	//	for (int i = 0; i < 100 && g_pLobbyApp->IsPlayerWaitingForAuthorization(strPlayerIdentifier) == true; i++)
+	//	{
+	//		Sleep(100);
+	//	}
+
+	//	if (g_pLobbyApp->IsPlayerWaitingForAuthorization(strPlayerIdentifier) == true)
+	//	{
+	//		sprintf(resultMessage, "There was a timeout getting authorization from Steam. Please try logging into your steam client again, and then relaunch Allegiance.");
+	//		mutex->lock();
+	//		pqd->fValid = false;
+	//		pqd->fRetry = false;
+	//		pqd->szReason = new char[lstrlen(resultMessage) + 1];
+	//		Strcpy(pqd->szReason, resultMessage);
+	//		mutex->unlock();
+	//	}
+
+	//	// tell the main thread we've finished, use the existing thread msg for AZ SQL 
+	//	PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM)NULL, (LPARAM)pQuery);
+	//}
+
+	
 }
+//
+//static bool kickPlayerBySteamID(CSteamID steamID)
+//{
+//	char steamIdBuffer[64];
+//	sprintf(steamIdBuffer, "%", PRIu64, steamID.ConvertToUint64());
+//	ZString playerID = steamIdBuffer;
+//
+//	PlayersBySteamIdentifier::iterator iterPlayerBySteamID = playersBySteamIdentifier.find(playerID);
+//	bool foundPlayer = false;
+//
+//	// if we think that player is already logged on...
+//	while (iterPlayerBySteamID != playersBySteamIdentifier.end()
+//		&& (*iterPlayerBySteamID).first == playerID)
+//	{
+//		foundPlayer = true;
+//		void * data = (*iterPlayerBySteamID).second;
+//
+//		CSQLQuery * pQuery = (CSQLQuery *)data;  //use the AZ legacy data & callback
+//		CQLobbyLogon * pls = (CQLobbyLogon *)data;
+//		CQLobbyLogonData * pqd = pls->GetData();
+//
+//		char resultMessage[1024];
+//
+//		sprintf(resultMessage, "Authentication error, please try to log in to Steam again.");
+//
+//		mutex->lock();
+//		pqd->fValid = false;
+//		pqd->fRetry = false;
+//		pqd->szReason = new char[lstrlen(resultMessage) + 1];
+//		Strcpy(pqd->szReason, resultMessage);
+//		mutex->unlock();
+//
+//		PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM)NULL, (LPARAM)pQuery);
+//	}
+//
+//	return foundPlayer;
+//		
+//}
 
 
 void QueueMissions(FedMessaging * pfm)

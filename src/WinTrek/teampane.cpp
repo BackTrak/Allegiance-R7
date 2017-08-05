@@ -1638,39 +1638,47 @@ public:
         switch (cid)
         {
             
-        case 1:
+        case c_cidAttack:
             m_pstringIcon = ZString("ackillbmp");
             break;
             
-        case 2:
+        case c_cidCapture:
             m_pstringIcon = ZString("accptbmp");
             break;
             
-        case 3:
+        case c_cidDefend:
             m_pstringIcon = ZString("acdefendbmp");
             break;
             
-        case 4:
+        case c_cidPickup:
             m_pstringIcon = ZString("acpickupbmp");
             break;
             
-        case 5:
+        case c_cidGoto:
             m_pstringIcon = ZString("acgotobmp");
             break;
             
-        case 6:
+        case c_cidRepair:
             m_pstringIcon = ZString("acrepairbmp");
             break;
             
-        case 7:
+        case c_cidJoin:
             m_pstringIcon = ZString("acjoinbmp");
             break;
             
-        case 8:
+		case c_cidStop: //#321
+            m_pstringIcon = ZString("acstopbmp");
+            break;
+            
+        case c_cidHide: //#320
+            m_pstringIcon = ZString("achidebmp");
+            break;
+            
+        case c_cidMine:
             m_pstringIcon = ZString("acminebmp");
             break;
             
-        case 9:
+        case c_cidBuild:
             m_pstringIcon = ZString("acbuildbmp");
             break;
             
@@ -1806,7 +1814,10 @@ class ExpandedTeamPane : public TeamPane
             // draw the player's Wing
             if (pplayer->SideID() == trekClient.GetSideID())
             {
-                psurface->DrawString(pfont, color, WinPoint(m_viColumns[4] + 2, 1), c_pszWingName[pship->GetWingID()]);
+				// BT - 7/15 - When the team screen is shown, miners have -1 for the wingID, which causes alleg to crash.
+				int wingID = pship->GetWingID();
+				if(wingID != NA)
+					psurface->DrawString(pfont, color, WinPoint(m_viColumns[4] + 2, 1), c_pszWingName[wingID]);
             }
 
 			// draw the rank: AEM 7.21.07

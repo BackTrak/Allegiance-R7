@@ -15,7 +15,7 @@
 #include "main.h"
 #include "../Inc/regkey.h"
 
-#include "VideoSettingsDX9.h"
+//#include "VideoSettingsDX9.h"
 
 //////////////////////////////////////////////////////////////////////////////
 //

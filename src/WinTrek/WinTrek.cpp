@@ -131,77 +131,6 @@ float   GetThrottle(ImodelIGC*  pmodel)
 // Misc Helpers
 //
 //////////////////////////////////////////////////////////////////////////////
-//Imago 7/20/09
-TRef<IMessageBox> pmsgBoxPack;
-void DummyPackCreateCallback( int iCurrentFileIndex, int iMaxFileIndex )
-{
-	if (iCurrentFileIndex == -1 && iMaxFileIndex == -1) {
-		GetWindow()->GetPopupContainer()->ClosePopup(pmsgBoxPack);
-		GetWindow()->RestoreCursor();
-	}
-}
-DWORD WINAPI DummyPackCreateThreadProc( LPVOID param )
-{
-	ZString strArtwork = ZString(UTL::artworkPath()); //duh
-	CDX9PackFile textures(strArtwork , "CommonTextures" );
-	textures.Create( DummyPackCreateCallback );
-	return 0;
-}
-//Imago 7/29/09
-DWORD WINAPI DDVidCreateThreadProc( LPVOID param ) {
-	
-	//windowed 7/10 #112
-	PlayVideoInfo * pData = (PlayVideoInfo*)param;
-	DDVideo *DDVid = new DDVideo();
-	bool bOk = true;
-	bool bHide = false;
-	HWND hwndFound = NULL;
-	if (pData->bWindowed) {
-		hwndFound=FindWindow(NULL, "Allegiance");
-	} else {
-		//this window will have our "intro" in it...
-		hwndFound = ::CreateWindow("MS_ZLib_Window", "Intro", WS_VISIBLE|WS_POPUP, 0, 0,
-			GetSystemMetrics(SM_CXFULLSCREEN),GetSystemMetrics(SM_CYFULLSCREEN),NULL, NULL,
-			::GetModuleHandle(NULL), NULL);
-		bHide = true;
-	}
-	
-	DDVid->m_hWnd = hwndFound;	
-
-	if( SUCCEEDED( DDVid->Play(pData->pathStr,pData->bWindowed))) //(WMV2 is good as most machines read it)
-    {
-		::ShowCursor(FALSE);
-		while( DDVid->m_Running && bOk) //we can now do other stuff while playing
-        {
-			if(!DDVid->m_pVideo->IsPlaying() || GetAsyncKeyState(VK_ESCAPE) ||
-				GetAsyncKeyState(VK_SPACE) || GetAsyncKeyState(VK_RETURN) || 
-				GetAsyncKeyState(VK_LBUTTON) || GetAsyncKeyState(VK_RBUTTON))
-			{
-				DDVid->m_Running = FALSE;
-				DDVid->m_pVideo->Stop();
-			} else	{
-		    	DDVid->m_pVideo->Draw(DDVid->m_lpDDSBack);
-				if (pData->bWindowed) {
-					bOk = DDVid->Flip(); //windowed #112 Imagooooo
-				} else {
-					DDVid->m_lpDDSPrimary->Flip(0,DDFLIP_WAIT);
-				}
-			}
-		}
-		::ShowCursor(TRUE);
-		DDVid->DestroyDDVid();
-	} else {
-		DDVid->DestroyDirectDraw();
-	}
-
-	delete pData;
-
-	if (bHide)
-		::DestroyWindow(hwndFound);
-
-	return 0;
-}
-//
 
 TRef<IMessageBox> CreateMessageBox(
     const ZString& str,
@@ -1128,6 +1057,12 @@ public:
     //
     //////////////////////////////////////////////////////////////////////////////
 
+	// #360
+	static const WORD	timestamp_never = 0;
+	static const WORD	timestamp_lobby = 1;
+	static const WORD	timestamp_always = 2;
+	WORD				m_timestamp;
+
     unsigned long       m_frameID;
     Time                m_timeLastFrame;
     Time                m_timeLastDamage;
@@ -1158,11 +1093,19 @@ public:
     TRef<ModifiableBoolean> m_pboolChatHistoryHUD;
     TRef<ModifiableBoolean> m_pboolCenterHUD;
     TRef<ModifiableBoolean> m_pboolTargetHUD;
-    TRef<ModifiableNumber>  m_pnumberStyleHUD;
+	TRef<ModifiableNumber> m_pnumberStyleHUD;
+
     TRef<ModifiableNumber>  m_pnumberIsGhost;
     TRef<ModifiableNumber>  m_pnumberFlash;
     TRef<ModifiableNumber>  m_pnumberTeamPaneCollapsed;
-    TRef<WrapNumber>        m_pwrapNumberStyleHUD;
+	TRef<WrapNumber>        m_pwrapNumberStyleHUD;
+	
+	// #294/#361
+	TRef<ModifiableNumber>  m_pnumberChatLinesDesired;
+	TRef<ModifiableNumber>  m_pnumberChatLines;
+	TRef<WrapNumber>		m_pwrapNumberChatLines;
+	TRef<ModifiableNumber>  m_pnumberShowScrollbar;
+	TRef<WrapNumber>		m_pwrapNumberShowScrollbar;
 
     //
     // exports
@@ -1356,6 +1299,10 @@ public:
     TRef<IMenuItem>            m_pitemFilterChatsToAll;
     TRef<IMenuItem>            m_pitemFilterQuickComms;
     TRef<IMenuItem>            m_pitemFilterLobbyChats;
+	TRef<IMenuItem>			   m_pitemCycleTimestamp;		// #360
+	TRef<IMenuItem>			   m_pitemIncreaseChatLines;	//
+	TRef<IMenuItem>			   m_pitemReduceChatLines;		// #294
+	TRef<IMenuItem>			   m_pitemScrollbar;			//
     TRef<IMenuItem>            m_pitemSoundQuality;
     TRef<IMenuItem>            m_pitemToggleSoundHardware;
     TRef<IMenuItem>            m_pitemToggleDSound8Usage;
@@ -1528,6 +1475,8 @@ public:
 
     void InitializeGameStateContainer()
     {
+		if (!m_pconsoleImage) return; // #294
+
         m_pgsc = m_pconsoleImage->GetGameStateContainer();
         m_pgameStateCloseSink =
             new GameStateCloseSink(
@@ -2159,11 +2108,10 @@ public:
             m_pimageScreen = CreatePaneImage(GetEngine(), SurfaceType3D(), false, pscreen->GetPane());
         }
 
-        m_pwrapImageTop->SetImage(m_pimageScreen);
-        SetWindowedSize(pscreen->GetSize());
-        SetFullscreenSize(Vector(pscreen->GetSize().X(),pscreen->GetSize().Y(),g_DX9Settings.m_refreshrate));
-
-        SetSizeable(false);
+		m_pwrapImageTop->SetImage(m_pimageScreen);
+		SetWindowedSize(pscreen->GetSize());
+		SetFullscreenSize(pscreen->GetSize());
+		SetSizeable(false);
 
         //
         // keep a reference to the screen to keep it alive
@@ -2262,8 +2210,7 @@ public:
                     // Switch to combat resolution
                     //
 
-					//imago add refresh rate 7/1/09
-					SetFullscreenSize(Vector(m_sizeCombatFullscreen.X(),m_sizeCombatFullscreen.Y(),g_DX9Settings.m_refreshrate));  //AEM 7.15.07  To prevent the wrong resolution from being loaded, set to the CombatFullscreen size here
+					SetFullscreenSize(m_sizeCombatFullscreen);  //AEM 7.15.07  To prevent the wrong resolution from being loaded, set to the CombatFullscreen size here
 
                     SetFocus();
                     m_frameID = 0;
@@ -2320,57 +2267,11 @@ public:
                     break;
 
 				case ScreenIDSplashScreen:
-					{
-						//Imago 6/29/09 7/28/09 dont allow intro vid on nonprimary
-						HMODULE hVidTest = ::LoadLibraryA("WMVDECOD.dll");
-						HMODULE hAudTest = ::LoadLibraryA("wmadmod.dll");
-						bool bWMP = (hVidTest && hAudTest) ? true : false;
-						::FreeLibrary(hVidTest); ::FreeLibrary(hAudTest); 
-						if (!CD3DDevice9::Get()->GetDeviceSetupParams()->iAdapterID && bWMP) {					
-							//dont' check for intro.avi, 
-							// let the screen flash so they at least know this works
-							DDVideo *DDVid = new DDVideo();
-							if (m_pengine->IsFullscreen()) {
-								CD3DDevice9::Get()->ResetDevice(true,0,0,0);
-							}
-							DDVid->m_hWnd =  GetHWND();
-							bool bOk = true;
-							ZString pathStr = GetModeler()->GetArtPath() + "/intro.avi"; //this can be any kind of AV file
-							if(SUCCEEDED(DDVid->Play(pathStr,!m_pengine->IsFullscreen()))) //(Type WMV2 is good as most systems will play it)  
-							{ 
-								GetAsyncKeyState(VK_LBUTTON); GetAsyncKeyState(VK_RBUTTON);
-								::ShowCursor(FALSE);
-								while( DDVid->m_Running && bOk) //imago windooooow #112 7/10
-								{
-									if(!DDVid->m_pVideo->IsPlaying() || GetAsyncKeyState(VK_ESCAPE) || GetAsyncKeyState(VK_SPACE) || 
-										GetAsyncKeyState(VK_RETURN) || GetAsyncKeyState(VK_LBUTTON) || GetAsyncKeyState(VK_RBUTTON))
-									{
-										DDVid->m_Running = FALSE;
-										DDVid->m_pVideo->Stop();
-									} else	{
-										DDVid->m_pVideo->Draw(DDVid->m_lpDDSBack);
-										if (m_pengine->IsFullscreen()) {
-											DDVid->m_lpDDSPrimary->Flip(0,DDFLIP_WAIT);
-										} else {
-											bOk = DDVid->Flip();
-										}
-									}
-								}
-								::ShowCursor(TRUE);
-								DDVid->DestroyDDVid();
-							} else {
-								DDVid->DestroyDirectDraw();
-							}
-
-							if (m_pengine->IsFullscreen()) {
-								CD3DDevice9::Get()->ResetDevice(false,800,600,g_DX9Settings.m_refreshrate);
-							}
-						}
-						GetWindow()->screen(ScreenIDIntroScreen);
-						SetScreen(CreateIntroScreen(GetModeler()));
+#ifndef BUILD_DX9
+                    SetScreen(CreateVideoScreen(GetModeler(), true));
+                    SetCursorImage(Image::GetEmpty());
+#endif //BUILD_DX9
 	                    break;
-					}
-
 
                 case ScreenIDTrainScreen:
                     SetScreen(CreateTrainingScreen(GetModeler()));
@@ -2556,30 +2457,29 @@ public:
     TrekWindowImpl(
         EffectApp*     papp,
         const ZString& strCommandLine,
-// BUILD_DX9
+#ifdef BUILD_DX9
 		const ZString& strArtPath,
-// BUILD_DX9
+#endif // BUILD_DX9
         bool           bMovies,
         bool           bSoftware,
         bool           bHardware,
         bool           bPrimary,
         bool           bSecondary
     ) :
-// BUILD_DX9
+#ifdef BUILD_DX9
         TrekWindow(
             papp,
             strCommandLine,
             true,
-			WinRect(0 + CD3DDevice9::Get()->GetDeviceSetupParams()->iWindowOffsetX,
-					0 + CD3DDevice9::Get()->GetDeviceSetupParams()->iWindowOffsetY,
-					CD3DDevice9::Get()->GetCurrentMode()->mode.Width +
-									CD3DDevice9::Get()->GetDeviceSetupParams()->iWindowOffsetX,
-					CD3DDevice9::Get()->GetCurrentMode()->mode.Height +
-									CD3DDevice9::Get()->GetDeviceSetupParams()->iWindowOffsetY),
+            WinRect(0 + CD3DDevice9::sDevSetupParams.iWindowOffsetX, 
+					0 + CD3DDevice9::sDevSetupParams.iWindowOffsetY,
+					CD3DDevice9::GetCurrentMode()->mode.Width + 
+									CD3DDevice9::sDevSetupParams.iWindowOffsetX,
+					CD3DDevice9::GetCurrentMode()->mode.Height + 
+									CD3DDevice9::sDevSetupParams.iWindowOffsetY),
               WinPoint(800, 600)
         ),
-
-/*
+#else
         TrekWindow(
             papp,
             strCommandLine,
@@ -2587,8 +2487,7 @@ public:
             WinRect(0, 0, 800, 600),
             WinPoint(640, 480)
         ),
-*/
-// BUILD_DX9
+#endif // BUILD_DX9
         m_screen(ScreenIDSplashScreen),
         m_bShowMeteors(true),
         m_bShowStations(true),
@@ -2640,7 +2539,7 @@ public:
     {
         HRESULT hr;
 
-// BUILD_DX9
+#ifdef BUILD_DX9
 		// Move this call here, so that engine initialisation is performed *AFTER* we have a valid HWND.
 		papp->Initialize( strCommandLine, GetHWND() );
 		m_pengine = papp->GetEngine();
@@ -2649,31 +2548,10 @@ public:
 		// Now set the art path, performed after initialise, else Modeler isn't valid.
 		GetModeler()->SetArtPath(strArtPath);
 
-		//Imago 6/29/09 7/28/09 now plays video in thread while load continues
-		HANDLE hDDVidThread = NULL;
-		ZString pathStr = GetModeler()->GetArtPath() + "/intro.avi";
+		// turkey #294 Build the list of huds; needs to be after the modeler knows the art path
+		GetModeler()->BuildHudList();
+		SetHUDStyle(LoadPreference("SoftwareHUD", 0)); // moved this up because we need to know which mod we're using early
 
-		if (!g_bQuickstart && bMovies && !g_bReloaded && !bSoftware &&
-		::GetFileAttributes(pathStr) != INVALID_FILE_ATTRIBUTES && 
-		!CD3DDevice9::Get()->GetDeviceSetupParams()->iAdapterID) {
-			//Imago only check for these if we have to 8/16/09
-			HMODULE hVidTest = ::LoadLibraryA("WMVDECOD.dll");
-			HMODULE hAudTest = ::LoadLibraryA("wmadmod.dll");
-			bool bWMP = (hVidTest && hAudTest) ? true : false;
-			::FreeLibrary(hVidTest); ::FreeLibrary(hAudTest); 
-			if (bWMP) {
-				if (!CD3DDevice9::Get()->IsWindowed()) {
-					::ShowWindow(GetHWND(),SW_HIDE);
-				}
-
-				//#112 windowed 7/10 Imago
-				PlayVideoInfo * pData = new PlayVideoInfo;
-				pData->pathStr = pathStr;
-				pData->bWindowed = CD3DDevice9::Get()->IsWindowed();
-
-				hDDVidThread = CreateThread(NULL,0,DDVidCreateThreadProc,(void *)pData,THREAD_PRIORITY_HIGHEST,0);
-			}
-		}
 
 		m_pnumFFGain = new ModifiableNumber((float)LoadPreference("FFGain", 10000)); //Imago #187 
 		m_pnumMouseSens = new ModifiableNumber(atof(LoadPreference("MouseSensitivity", "1.0"))); //Imago #215 8/10
@@ -2684,7 +2562,10 @@ public:
 		// Perform post window creation initialisation. Initialise the time value.
 		PostWindowCreationInit( );
 		InitialiseTime();
-// BUILD_DX9
+#endif BUILD_DX9
+
+		m_pnumFFGain = new ModifiableNumber((float)LoadPreference("FFGain", 10000)); //Imago #187 
+		m_pnumMouseSens = new ModifiableNumber(atof(LoadPreference("MouseSensitivity", "1.0"))); //Imago #215 8/10
 
         if (!IsValid()) {
             return;
@@ -2761,12 +2642,18 @@ public:
         pnsGamePanes->AddMember("ShowCenterHUD", m_pboolCenterHUD = new ModifiableBoolean(true));
         pnsGamePanes->AddMember("ShowTargetHUD", m_pboolTargetHUD = new ModifiableBoolean(true));
 
-        pnsGamePanes->AddMember(
-            "StyleHUD",
-            m_pwrapNumberStyleHUD = new WrapNumber(
-                m_pnumberStyleHUD = new ModifiableNumber(0)
-            )
-        );
+		pnsGamePanes->AddMember(
+			"StyleHUD",
+			m_pwrapNumberStyleHUD = new WrapNumber(
+				m_pnumberStyleHUD = new ModifiableNumber(0)
+			)
+		);
+
+		// turkey #294 stylehud used to be here but it's obsolete now
+		// we need a couple of chatlist settings though
+		m_pnumberChatLinesDesired = new ModifiableNumber(0);
+		pnsGamePanes->AddMember("NumChatLines", m_pwrapNumberChatLines = new WrapNumber(m_pnumberChatLines = new ModifiableNumber(0)));
+		pnsGamePanes->AddMember("ShowScrollbarOnCockpitChat", m_pwrapNumberShowScrollbar = new WrapNumber(m_pnumberShowScrollbar = new ModifiableNumber(1)));
 
         pnsGamePanes->AddMember("Flash", m_pnumberFlash = new ModifiableNumber(0));
         pnsGamePanes->AddMember("TeamPaneCollapsed", m_pnumberTeamPaneCollapsed = new ModifiableNumber(0));
@@ -2845,13 +2732,6 @@ public:
 
         InitializeImages();
 		
-		if (hDDVidThread != NULL) { //imago 7/29/09 intro.avi
-			if (!CD3DDevice9::Get()->IsWindowed()) {
-				CD3DDevice9::Get()->ResetDevice(false,800,600,g_DX9Settings.m_refreshrate);
-			}
-		}
-		
-
         //
         // initialize the sound engine (for the intro music if nothing else)
         //
@@ -2906,27 +2786,37 @@ public:
 
         m_bCombatSize = false;
 
-//imago restored original functionality 6/28/09
+#ifdef BUILD_DX9
+/*		m_sizeCombat = 
+            WinPoint(	CD3DDevice9::GetCurrentMode()->mode.Width,
+						CD3DDevice9::GetCurrentMode()->mode.Height );
+        m_sizeCombatFullscreen = 
+            WinPoint(	CD3DDevice9::GetCurrentMode()->mode.Width,
+						CD3DDevice9::GetCurrentMode()->mode.Height );*/
+//		m_sizeCombat = 
+//			WinPoint(	CD3DDevice9::sDevSetupParams.sWindowedMode.mode.Width,
+//						CD3DDevice9::sDevSetupParams.sWindowedMode.mode.Height );
+		m_sizeCombat = 
+            WinPoint(
+                int(LoadPreference("CombatXSize", 800)),
+                int(LoadPreference("CombatYSize", 600))
+            );
+		m_sizeCombatFullscreen = 
+			WinPoint(	CD3DDevice9::sDevSetupParams.sFullScreenMode.mode.Width,
+						CD3DDevice9::sDevSetupParams.sFullScreenMode.mode.Height );
+#else
 		m_sizeCombat =
             WinPoint(
                 int(LoadPreference("CombatXSize", 800)),
                 int(LoadPreference("CombatYSize", 600))
             );
-		//m_sizeCombatFullscreen =
-		//	WinPoint(	CD3DDevice9::Get()->GetDeviceSetupParams()->sFullScreenMode.mode.Width,
-		//				CD3DDevice9::Get()->GetDeviceSetupParams()->sFullScreenMode.mode.Height );
 
        m_sizeCombatFullscreen =
            WinPoint(
                 int(LoadPreference("CombatFullscreenXSize", 800)),
                 int(LoadPreference("CombatFullscreenYSize", 600))
             );
-
-	   //Imago 7/27/09 Win7
-	   if (m_sizeCombatFullscreen ==  WinPoint(0,0))
-		   m_sizeCombatFullscreen = WinPoint(800,600);
-
-// BUILD_DX9
+#endif // BUILD_DX9
 
         //
         // Music toggle
@@ -3185,6 +3075,14 @@ public:
 
 		ToggleFilterLobbyChats(LoadPreference("FilterLobbyChats", 0)); //TheBored 25-JUN-07: Mute lobby chat patch // mmf 04/08 default this to 0
 
+		GetEngine()->SetMaxTextureSize(trekClient.MaxTextureSize());// yp Your_Persona August 2 2006 : MaxTextureSize Patch
+		// #360 timestamps are off by default
+		m_timestamp = LoadPreference("Timestamp", 0);
+
+		// #294
+		SetChatLines(LoadPreference("ChatLines", 10));
+		if (!LoadPreference("ShowScrollbar", 0)) ToggleScrollbar();
+
 		/* pkk May 6th: Disabled bandwidth patch
 		ToggleBandwidth(LoadPreference("Bandwidth",32)); // w0dk4 June 2007: Bandwith Patch - Increase default to max Imago 8/10*/
 
@@ -3222,18 +3120,17 @@ public:
         m_pmissileLast = 0;
 
         //
-        // intro.avi video moved up
+        // Show the intro videos
         //
-		TRef<Screen> introscr = CreateIntroScreen(GetModeler());
-		SetScreen(introscr);
+
+        // KGJV 32B - byebye video for now
+        //if (!g_bQuickstart && bMovies  && !g_bReloaded) {
+        //    SetScreen(CreateVideoScreen(GetModeler(), false));
+        //} else {
+            SetScreen(CreateIntroScreen(GetModeler()));
         m_screen = ScreenIDIntroScreen;
         RestoreCursor();
-    	if (hDDVidThread != NULL) {
-			WaitForSingleObject(hDDVidThread,INFINITE);
-			if (!CD3DDevice9::Get()->IsWindowed()) 
-				::ShowWindow(GetHWND(),SW_SHOWMAXIMIZED);
-			CloseHandle(hDDVidThread);
-		}    
+        //}
     }
 
     void InitializeImages()
@@ -3890,6 +3787,11 @@ public:
     #define	idmMuteFilterOptions		 635 //TheBored 30-JUL-07: Filter Unknown Chat patch
     #define idmFilterUnknownChats		 636 //TheBored 30-JUL-07: Filter Unknown Chat patch
 
+	#define idmScrollbar				 637 // #294
+	#define idmIncreaseChatLines		 638 // #294
+	#define idmReduceChatLines			 639 // #294
+	#define idmCycleTimestamp			 640 // #360
+
     #define idmResetSound           701
     #define idmSoundQuality         702
     #define idmSoundHardware        703
@@ -4289,7 +4191,9 @@ public:
                 m_pitemToggleLensFlare             = pmenu->AddMenuItem(idmToggleLensFlare,             GetLensFlareMenuString()            , 'F');
                 m_pitemToggleBidirectionalLighting = pmenu->AddMenuItem(idmToggleBidirectionalLighting, GetBidirectionalLightingMenuString(), 'B');
                 m_pitemStyleHUD                    = pmenu->AddMenuItem(idmStyleHUD,                    GetStyleHUDMenuString()             , 'H');
- 				//Imago 6/30/09 adjust new dx9 settings in game
+                // yp Your_Persona August 2 2006 : MaxTextureSize Patch
+                m_pitemMaxTextureSize              = pmenu->AddMenuItem(idmMaxTextureSize,            GetMaxTextureSizeMenuString(),    'X');
+
 				break;
 
             case idmGameOptions:
@@ -4337,17 +4241,21 @@ public:
                 m_pitemFilterQuickComms            = pmenu->AddMenuItem(idmFilterQuickComms,            GetFilterQuickCommsMenuString(),    'V');
 				m_pitemFilterUnknownChats          = pmenu->AddMenuItem(idmFilterUnknownChats,          GetFilterUnknownChatsString(),      'U');
                 m_pitemFilterLobbyChats            = pmenu->AddMenuItem(idmFilterLobbyChats,            GetFilterLobbyChatsMenuString(),    'L');
+				m_pitemCycleTimestamp			   = pmenu->AddMenuItem(idmCycleTimestamp,				GetCycleTimestampMenuString(),		'T');
+				m_pitemScrollbar				   = pmenu->AddMenuItem(idmScrollbar,					GetToggleScrollbarMenuString(),		'S');
+				m_pitemIncreaseChatLines		   = pmenu->AddMenuItem(idmIncreaseChatLines,			GetIncreaseChatLinesMenuString(),	'I');
+				m_pitemReduceChatLines			   = pmenu->AddMenuItem(idmReduceChatLines,				GetReduceChatLinesMenuString(),		'R');
 				break;
 			//End TB 30-JUL-07
 			//imago 6/30/09: new graphics options dx9, removed vsync 7/10
-			case idmDeviceOptions:
-				m_pitemAA				= pmenu->AddMenuItem(idmAA   			  , GetAAString()                                       , 'A');
-			    m_pitemMip				= pmenu->AddMenuItem(idmMip    			  , GetMipString()                                      , 'M');
-				m_pitemVsync			= pmenu->AddMenuItem(idmVsync  			  , GetVsyncString()                                    , 'V'); //Spunky #265 backing out //Imago 7/10
-				// yp Your_Persona August 2 2006 : MaxTextureSize Patch
-				m_pitemMaxTextureSize	= pmenu->AddMenuItem(idmMaxTextureSize,     GetMaxTextureSizeMenuString(),    					  'X');
-				m_pitemPack				= pmenu->AddMenuItem(idmPack  			  , GetPackString()                                     , 'P');
-				break;
+			//case idmDeviceOptions:
+			//	m_pitemAA				= pmenu->AddMenuItem(idmAA   			  , GetAAString()                                       , 'A');
+			//    m_pitemMip				= pmenu->AddMenuItem(idmMip    			  , GetMipString()                                      , 'M');
+			//	m_pitemVsync			= pmenu->AddMenuItem(idmVsync  			  , GetVsyncString()                                    , 'V'); //Spunky #265 backing out //Imago 7/10
+			//	// yp Your_Persona August 2 2006 : MaxTextureSize Patch
+			//	m_pitemMaxTextureSize	= pmenu->AddMenuItem(idmMaxTextureSize,     GetMaxTextureSizeMenuString(),    					  'X');
+			//	m_pitemPack				= pmenu->AddMenuItem(idmPack  			  , GetPackString()                                     , 'P');
+			//	break;
 
 			//Imago 7/10 #187
 			case idmFFOptions:
@@ -4530,6 +4438,97 @@ public:
         }
     }
 	//End TB 25-JUN-07
+
+	// #360
+	bool IsShowingTimestamp() const
+	{
+		switch(m_timestamp)
+		{
+		case timestamp_never:
+			return false;
+		case timestamp_lobby:
+			return !trekClient.IsInGame();
+		case timestamp_always:
+			return true;
+		default:
+			ZAssert(false);
+			return false;
+		}
+	}
+
+	void CycleTimestamp()
+	{
+		m_timestamp++;
+		if (m_timestamp > timestamp_always) m_timestamp = 0;
+
+		//update the active chat pane if applicable
+		if (m_pchatListPane) m_pchatListPane->UpdateContents();
+	
+		m_pitemCycleTimestamp->SetString(GetCycleTimestampMenuString());
+
+		SavePreference("Timestamp", m_timestamp);
+	}
+
+	// turkey #294 8/13
+	void IncreaseChatLines()
+	{
+		DWORD lines = (DWORD) m_pnumberChatLinesDesired->GetValue() + 1;
+
+		if (SetChatLines(lines))
+		{
+			m_pitemIncreaseChatLines->SetString(GetIncreaseChatLinesMenuString());
+			m_pitemReduceChatLines->SetString(GetReduceChatLinesMenuString());
+
+			if (m_pchatListPane)
+			{
+				if (GetViewMode() == vmLoadout) 
+				{
+					m_pchatListPane->SetChatLines(min(lines, 6));
+					m_pnumberChatLines->SetValue(min(lines, 6));
+				}
+				else if (GetViewMode() <= vmOverride)
+				{
+					m_pchatListPane->SetChatLines(lines);
+					m_pnumberChatLines->SetValue(lines);
+				}
+			}
+
+			SavePreference("ChatLines", lines);
+		}
+	}
+
+	void ReduceChatLines()
+	{
+		DWORD lines = (DWORD) m_pnumberChatLinesDesired->GetValue() - 1;
+
+		if (SetChatLines(lines))
+		{
+			m_pitemIncreaseChatLines->SetString(GetIncreaseChatLinesMenuString());
+			m_pitemReduceChatLines->SetString(GetReduceChatLinesMenuString());
+
+			if (m_pchatListPane)
+			{
+				if (GetViewMode() == vmLoadout) 
+				{
+					m_pchatListPane->SetChatLines(min(lines, 6));
+					m_pnumberChatLines->SetValue(min(lines, 6));
+				}
+				else if (GetViewMode() <= vmOverride)
+				{
+					m_pchatListPane->SetChatLines(lines);
+					m_pnumberChatLines->SetValue(lines);
+				}
+			}
+
+
+			SavePreference("ChatLines", lines);
+		}
+	}
+
+	
+	
+	// end #294
+
     void ToggleLinearControls()
     {
         if (m_bLinearControls)
@@ -4621,12 +4620,11 @@ public:
         }
     }
 
-	// yp Your_Persona August 2 2006 : MaxTextureSize Patch  //Imago OBSOLOETE REMOVE REVIEW 7/20/09
+	// yp Your_Persona August 2 2006 : MaxTextureSize Patch
 	void ToggleMaxTextureSize(DWORD dwNewMaxSize)
 	{
 		if(dwNewMaxSize > 3){dwNewMaxSize =0;}
-        trekClient.MaxTextureSize(dwNewMaxSize); //? Imago REVIEW we use g_DX9Settings.m_iMaxTextureSize now
-		g_DX9Settings.m_iMaxTextureSize = dwNewMaxSize;
+        trekClient.MaxTextureSize(dwNewMaxSize);
 		GetEngine()->SetMaxTextureSize(trekClient.MaxTextureSize());
         SavePreference("MaxTextureSize", trekClient.MaxTextureSize());
 
@@ -4839,13 +4837,8 @@ public:
 
     void SetSmoke (DWORD value)
     {
-        if (value == 2) { //imago 8/16/09
-            ThingGeo::SetPerformance(true);
-            ThingGeo::SetShowSmoke (1);
-        } else {
             ThingGeo::SetShowSmoke (int (value));
            }
-    }
 
     void ToggleSmoke()
     {
@@ -4873,7 +4866,6 @@ public:
             default:
                 iSmoke = 0;
         }
-        ThingGeo::SetPerformance(bPerformance);
         ThingGeo::SetShowSmoke(iSmoke);
         SavePreference("SmokeEffects", (DWORD) (bPerformance) ? 2 : iSmoke);
 
@@ -4911,10 +4903,11 @@ public:
 
     //Something of a misnomer since there are only two styles but this may change
 	//Andon: Changed to support up to 5 styles
+	//turkey changed to support infinity styles!
     void CycleStyleHUD()
     {
-        int style = (int(m_pnumberStyleHUD->GetValue()) + 1) % 5;
-        m_pnumberStyleHUD->SetValue(float(style));
+		int style = GetModeler()->CycleStyleHud();
+        SetHUDStyle(style);
 
         SavePreference("SoftwareHUD", (DWORD)style);
 
@@ -4985,8 +4978,37 @@ public:
         SavePreference("Gamma", value);
     }
 
+	// #294 returns true if the requested value was within range (1-10), false otherwise
+	bool SetChatLines(DWORD value)
+	{
+		bool bInRange = false;
+		if (value >= 1)
+		{
+			if (value > 10) m_pnumberChatLinesDesired->SetValue(10.0f);
+			else 
+			{
+				m_pnumberChatLinesDesired->SetValue((float)value);
+				bInRange = true;
+			}
+		}
+		else
+		{
+			m_pnumberChatLinesDesired->SetValue(1.0f);
+		}
 
+		return bInRange;
+	}
 
+	void ToggleScrollbar()
+	{
+		if (m_pnumberShowScrollbar->GetValue() > 0.0f) m_pnumberShowScrollbar->SetValue(0.0f);
+		else m_pnumberShowScrollbar->SetValue(1.0f);
+
+		if (m_pitemScrollbar) {
+			m_pitemScrollbar->SetString(GetToggleScrollbarMenuString());
+			SavePreference("ShowScrollbar", m_pnumberShowScrollbar->GetValue());
+		}
+	}
 
     void ToggleFlipY()
     {
@@ -5026,9 +5048,8 @@ public:
     void RenderSizeChanged(bool bSmaller)
     {
         if (bSmaller && GetFullscreen()) {
-            m_pwrapNumberStyleHUD->SetWrappedValue(new Number(1.0f));
-        } else {
-            m_pwrapNumberStyleHUD->SetWrappedValue(m_pnumberStyleHUD);
+			GetModeler()->SetStyleHud("Software");  // #294 turkey changed to find the Software style
+			SetHUDStyle(GetModeler()->GetStyleHud());
         }
     }
 
@@ -5273,7 +5294,7 @@ public:
     {
 		int i = 0;
 		int j = 2;
-		i = 8 + g_DX9Settings.m_iMaxTextureSize; //trekClient.MaxTextureSize();
+		i = 8 + trekClient.MaxTextureSize();
 		j = pow((float)j,(float)i);
         return "Max Texture Size ("  + ZString( j)  + ") ";
     }
@@ -5399,6 +5420,42 @@ public:
         }
     }
 
+	// #360
+	ZString GetCycleTimestampMenuString()
+	{
+		switch (m_timestamp)
+		{
+		case timestamp_never:
+			return "Show Timestamps Never";
+			break;
+		case timestamp_lobby:
+			return "Show Timestamps In Lobby";
+			break;
+		case timestamp_always:
+			return "Show Timestamps Always";
+			break;
+		default:
+			return "Default case";
+		}
+	}
+
+	ZString GetToggleScrollbarMenuString()
+	{
+		return (m_pnumberShowScrollbar->GetValue() > 0.0f) ? "Show Cockpit Chat Scrollbar" : "Hide Cockpit Chat Scrollbar";
+	}
+
+	ZString GetIncreaseChatLinesMenuString()
+	{
+		if (m_pnumberChatLinesDesired->GetValue() > 9.9f) return "Chat Lines At Maximum";
+		return "Increase To " + ZString((int)m_pnumberChatLinesDesired->GetValue() + 1) + " Chat Lines";
+	}
+
+	ZString GetReduceChatLinesMenuString()
+	{
+		if (m_pnumberChatLinesDesired->GetValue() < 1.1f) return "Chat Lines At Minimum";
+		return "Reduce To " + ZString((int)m_pnumberChatLinesDesired->GetValue() - 1) + " Chat Lines";
+	}
+
     ZString GetLinearControlsMenuString()
     {
         return (m_bLinearControls) ? "Linear Control Response" : "Quadratic Control Response";
@@ -5512,38 +5569,11 @@ public:
         return (m_pboolTargetHUD->GetValue()) ? "Target HUD On " : "Target HUD Off ";
     }
 
-    //Andon: Expanding the number of HUD style switches available
-	const ZString& GetStyleHUDMenuString()
+	ZString GetStyleHUDMenuString()
     {
-        static const ZString    c_strNormal("Style: Normal");
-        static const ZString    c_strSoftware("Style: Software");
-		static const ZString    c_strCust1("Style: Custom Hud 1");//Add in the first custom one
-		static const ZString    c_strCust2("Style: Custom Hud 2");//Add in the second custom one
-		static const ZString    c_strCust3("Style: Custom Hud 3");//Add in the third custom one
-		static const ZString    c_strOops("Style: Error"); //Just in case I goofed
-
-		if (m_pnumberStyleHUD->GetValue() == 0)
-		{
-			return c_strNormal;
-		}
-		else if (m_pnumberStyleHUD->GetValue() == 1)
-		{
-			return c_strSoftware;
-		}
-		else if (m_pnumberStyleHUD->GetValue() == 2)
-		{
-			return c_strCust1;
-		}
-		else if (m_pnumberStyleHUD->GetValue() == 3)
-		{
-			return c_strCust2;
-		}
-		else
-		{
-			return c_strCust3;
-		}
-		//Andon: The old version, was simply True/False
-		//return (m_pnumberStyleHUD->GetValue()) ? c_strSoftware : c_strNormal;
+		// #294: pull the name from the modeler
+		ZString str = ZString("Style: ") + GetModeler()->GetStyleHudName();
+		return str;
     }
 
     const ZString& GetDeadzoneMenuString()
@@ -5624,7 +5654,7 @@ public:
     }
 
 	//imago WIP 6/30/09 7/18/09
-
+/*
 	ZString GetAAString()
 	{
 		return "Antialiasing (" + ZString(CD3DDevice9::Get()->GetDeviceSetupParams()->szAAType) + ")";
@@ -5646,6 +5676,7 @@ public:
 		ZString strResult = (CD3DDevice9::Get()->GetDeviceSetupParams()->bWaitForVSync) ? "On" : "Off";
 	    return "Vertical Sync ("+ strResult +")";
 	}
+*/
 
     void DoInputConfigure()
     {
@@ -5868,58 +5899,63 @@ public:
 				}
                 break;*/
 
-			//Imago 7/18/09
-			// yp Your_Persona August 2 2006 : MaxTextureSize Patch
-            case idmMaxTextureSize:
-                //ToggleMaxTextureSize(trekClient.MaxTextureSize()+1); Obsolete REMOVE REVIEW, extra, unneeded functions
-				GetEngine()->SetMaxTextureSize(g_DX9Settings.m_iMaxTextureSize+1);
-				SavePreference("MaxTextureSize", g_DX9Settings.m_iMaxTextureSize);
-		        if (m_pitemMaxTextureSize != NULL) {
-		            m_pitemMaxTextureSize->SetString(GetMaxTextureSizeMenuString());
-		        }
+				// yp Your_Persona August 2 2006 : MaxTextureSize Patch
+			case idmMaxTextureSize:
+				ToggleMaxTextureSize(trekClient.MaxTextureSize() + 1);
 				break;
 
-			case idmAA:
-				GetEngine()->SetAA(g_DX9Settings.m_dwAA+1);
-				SavePreference("UseAntialiasing", g_DX9Settings.m_dwAA);
-		        if (m_pitemAA != NULL) {
-		            m_pitemAA->SetString(GetAAString());
-		        }
-				break;
-			case idmMip:
-				GetEngine()->SetAutoGenMipMaps(!g_DX9Settings.m_bAutoGenMipmaps);
-				SavePreference("UseAutoMipMaps", g_DX9Settings.m_bAutoGenMipmaps);
-		        if (m_pitemMip != NULL) {
-		            m_pitemMip->SetString(GetMipString());
-		        }
-				break;
+			////Imago 7/18/09
+			//// yp Your_Persona August 2 2006 : MaxTextureSize Patch
+   //         case idmMaxTextureSize:
+   //             //ToggleMaxTextureSize(trekClient.MaxTextureSize()+1); Obsolete REMOVE REVIEW, extra, unneeded functions
+			//	GetEngine()->SetMaxTextureSize(g_DX9Settings.m_iMaxTextureSize+1);
+			//	SavePreference("MaxTextureSize", g_DX9Settings.m_iMaxTextureSize);
+		 //       if (m_pitemMaxTextureSize != NULL) {
+		 //           m_pitemMaxTextureSize->SetString(GetMaxTextureSizeMenuString());
+		 //       }
+			//	break;
 
-			case idmPack: { //this apparently doesn't even do anything yet....but we'll let them push it anyways.
-				ZString strArtwork = ZString(UTL::artworkPath()); //duh
-				CDX9PackFile textures(strArtwork , "CommonTextures" );
-				if (!textures.Exists() && !g_DX9Settings.mbUseTexturePackFiles) {
-					GetWindow()->SetWaitCursor();
-		            pmsgBoxPack = CreateMessageBox("Please wait while the texture pack file is being created.", NULL, false, false);
-		            GetPopupContainer()->OpenPopup(pmsgBoxPack, true);
-					CreateThread(NULL,0,DummyPackCreateThreadProc,NULL,THREAD_PRIORITY_HIGHEST,0);
-				}
-				GetEngine()->SetUsePack(!g_DX9Settings.mbUseTexturePackFiles);
-				SavePreference("UseTexturePack",g_DX9Settings.mbUseTexturePackFiles);
-		        if (m_pitemPack != NULL) {
-		            m_pitemPack->SetString(GetPackString());
-		        }
-				break;
-						  }
+			//case idmAA:
+			//	GetEngine()->SetAA(g_DX9Settings.m_dwAA+1);
+			//	SavePreference("UseAntialiasing", g_DX9Settings.m_dwAA);
+		 //       if (m_pitemAA != NULL) {
+		 //           m_pitemAA->SetString(GetAAString());
+		 //       }
+			//	break;
+			//case idmMip:
+			//	GetEngine()->SetAutoGenMipMaps(!g_DX9Settings.m_bAutoGenMipmaps);
+			//	SavePreference("UseAutoMipMaps", g_DX9Settings.m_bAutoGenMipmaps);
+		 //       if (m_pitemMip != NULL) {
+		 //           m_pitemMip->SetString(GetMipString());
+		 //       }
+			//	break;
 
-			case idmVsync:
-				//only does anything if the device is fullscreen...but we'll let them push it anyways.
-				GetEngine()->SetVSync(!g_DX9Settings.m_bVSync);
-				SavePreference("UseVSync", g_DX9Settings.m_bVSync);
-		        if (m_pitemVsync != NULL) {
-		            m_pitemVsync->SetString(GetVsyncString());
-		        }
-				break;
-			//
+			//case idmPack: { //this apparently doesn't even do anything yet....but we'll let them push it anyways.
+			//	ZString strArtwork = ZString(UTL::artworkPath()); //duh
+			//	CDX9PackFile textures(strArtwork , "CommonTextures" );
+			//	if (!textures.Exists() && !g_DX9Settings.mbUseTexturePackFiles) {
+			//		GetWindow()->SetWaitCursor();
+		 //           pmsgBoxPack = CreateMessageBox("Please wait while the texture pack file is being created.", NULL, false, false);
+		 //           GetPopupContainer()->OpenPopup(pmsgBoxPack, true);
+			//		CreateThread(NULL,0,DummyPackCreateThreadProc,NULL,THREAD_PRIORITY_HIGHEST,0);
+			//	}
+			//	GetEngine()->SetUsePack(!g_DX9Settings.mbUseTexturePackFiles);
+			//	SavePreference("UseTexturePack",g_DX9Settings.mbUseTexturePackFiles);
+		 //       if (m_pitemPack != NULL) {
+		 //           m_pitemPack->SetString(GetPackString());
+		 //       }
+			//	break;
+			//			  }
+
+			//case idmVsync:
+			//	//only does anything if the device is fullscreen...but we'll let them push it anyways.
+			//	GetEngine()->SetVSync(!g_DX9Settings.m_bVSync);
+			//	SavePreference("UseVSync", g_DX9Settings.m_bVSync);
+		 //       if (m_pitemVsync != NULL) {
+		 //           m_pitemVsync->SetString(GetVsyncString());
+		 //       }
+			//	break;
+			////
 
             case idmToggleRoundRadar:
                 ToggleRoundRadar ();
@@ -6307,7 +6343,7 @@ public:
 			// -KGJV - resolution fix - test
             Set3DAccelerationImportant(false);
             SetWindowedSize(m_sizeCombat);
-            SetFullscreenSize(Vector(m_sizeCombatFullscreen.X(),m_sizeCombatFullscreen.Y(),g_DX9Settings.m_refreshrate));
+            SetFullscreenSize(m_sizeCombatFullscreen);
             SetSizeable(true);  //AEM 7.16.07	Previously SetSizeable(false)  We can now adjust the fullscreen size in the Loudout screen.
             //SetWindowedSize(WinPoint(800, 600));
             //SetFullscreenSize(WinPoint(800, 600));
@@ -6320,7 +6356,7 @@ public:
             //
 
             SetWindowedSize(m_sizeCombat);
-            SetFullscreenSize(Vector(m_sizeCombatFullscreen.X(),m_sizeCombatFullscreen.Y(),g_DX9Settings.m_refreshrate));
+            SetFullscreenSize(m_sizeCombatFullscreen);
             Set3DAccelerationImportant(true);
             SetSizeable(true);
         }
@@ -6374,6 +6410,23 @@ public:
 			// yp - Your_Persona buttons get stuck patch. aug-03-2006
 			// clear the keyboard buttons.
 			m_ptrekInput->ClearButtonStates();
+
+			// #294 / #361 Use different number of chatlines for the loadout screen cos there's less space
+			if (m_pchatListPane)
+			{
+				int lines = m_pnumberChatLinesDesired->GetValue();
+
+				if (vm == vmLoadout) 
+				{
+					m_pchatListPane->SetChatLines(min(lines, 6));
+					m_pnumberChatLines->SetValue(min(lines, 6));
+				}
+				else if (vm <= vmOverride) 
+				{
+					m_pchatListPane->SetChatLines(lines);
+					m_pnumberChatLines->SetValue(lines);
+				}
+			}
 
             switch (vm)
             {
@@ -6518,16 +6571,24 @@ public:
     void ToggleOverlayFlags(OverlayMask om)
     {
         SetOverlayFlags(m_voverlaymask[m_viewmode] ^ om);
+		if (!Training::IsTraining () && m_viewmode == vmCombat) //imago 10/14
+			SavePreference("OverlayCombatFlags",(DWORD)m_voverlaymask[m_viewmode]);
     }
 
+	// #294 turkey changed sector map to be on everywhere by default, and inventory on during combat
+	// was inventory never and sector map in combat and command only
     void ResetOverlayMask()
     {
         for (int i = 0; i < c_cViewModes; i++)
         {
-            m_voverlaymask[i] = 0;
+			m_voverlaymask[i] = ofSectorPane;
         }
-        m_voverlaymask[vmCombat] = ofSectorPane;
-        m_voverlaymask[vmCommand] = ofSectorPane;
+		//Imago 10/14 made combat om persist
+		OverlayMask om = (OverlayMask)LoadPreference("OverlayCombatFlags",0);
+		if (om != 0)
+			m_voverlaymask[vmCombat] = om;
+		else
+			m_voverlaymask[vmCombat] |= ofInventory;
     }
 
     void CopyOverlayFlags(OverlayMask om, bool bSet)
@@ -8456,6 +8517,21 @@ public:
         return false;
     }
 
+	// turkey #294 8/13 allow people to add or remove view panes
+	bool CanBePressedDuringOverride(TrekKey tk)
+	{
+		switch (tk)
+		{
+		case TK_StartChat:
+		case TK_ConModeInventory:
+		case TK_ConModeNav:
+		case TK_ViewSector:
+			return true;
+		default:
+			return false;
+		}
+	}
+
     bool OnChar(IInputProvider* pprovider, const KeyState& ks)
     {
         if (!GetUI()) {
@@ -8840,14 +8916,35 @@ public:
     //
     //////////////////////////////////////////////////////////////////////////////
 
-    float   GetHUDStyle (void) const
+	// #294 these were just getters and setters for the styleHud variable
+	// now they pass the new style through to the modeler and fix the display when necessary
+    int     GetHUDStyle (void)
     {
-        return m_pnumberStyleHUD->GetValue ();
+		return GetModeler()->GetStyleHud();
     }
 
-    void    SetHUDStyle (float newStyle)
+    void    SetHUDStyle (int newStyle)
     {
-        m_pnumberStyleHUD->SetValue (newStyle);
+		GetModeler()->SetStyleHud(newStyle);
+
+	    if (m_pconsoleImage)
+		{
+
+			m_pconsoleImage->SetDisplayMDL(trekClient.GetSide()->GetCivilization()->GetHUDName());
+
+			// Reading the display MDL breaks the loadout and hanger screens, this fixes it.
+			// This will also close excess panes and menus and things, which is annoying.
+			if (m_viewmode == vmHangar)
+			{
+				SetViewMode(vmCommand);
+				SetViewMode(vmHangar);
+			}
+			if (m_viewmode == vmLoadout)
+			{
+				SetViewMode(vmCommand);
+				SetViewMode(vmLoadout);
+			}
+		}
     }
 
     //////////////////////////////////////////////////////////////////////////////
@@ -8979,9 +9076,9 @@ public:
 
         m_phelpPosition = new HelpPosition(GetTime(), m_phelp->GetEventSourceClose());
 
-// BUILD_DX9
+#ifdef BUILD_DX9
 		GetModeler()->SetColorKeyHint( true );
-// BUILD_DX9
+#endif // BUILD_DX9
 
         m_pwrapImageHelp->SetImage(
             new TransformImage(
@@ -8995,9 +9092,9 @@ public:
             )
         );
 
-// BUILD_DX9
+#ifdef BUILD_DX9
 		GetModeler()->SetColorKeyHint( false );
-// BUILD_DX9
+#endif // BUILD_DX9
 	}
 
     void OnHelp(bool bOn)
@@ -10368,7 +10465,7 @@ public:
             if (cid != c_cidNone)
             {
                 ImodelIGC*  pmodel = trekClient.GetShip()->GetCommandTarget(c_cmdQueued);
-                if (pmodel && trekClient.GetShip()->LegalCommand(cid, pmodel))
+                if ((pmodel || cid == c_cidStop) && trekClient.GetShip()->LegalCommand(cid, pmodel)) //#321 included c_cidStop
                 {
                     trekClient.PlaySoundEffect(acceptCommandSound);
                     if (cid == c_cidJoin)
@@ -10400,7 +10497,7 @@ public:
                         if (bExecute &&
                             (trekClient.GetShip()->GetStation() == NULL) &&
                             (trekClient.GetShip()->GetParentShip() == NULL) &&
-                            trekClient.GetCluster(trekClient.GetShip(), pmodel))
+                            (cid == c_cidStop || trekClient.GetCluster(trekClient.GetShip(), pmodel))) //#321 included c_cidStop
                         {
                             trekClient.SetAutoPilot(true);
                             trekClient.bInitTrekJoyStick = true;
@@ -11029,9 +11126,9 @@ TrekWindowImpl::FlagsWinConditionInfo          TrekWindowImpl::s_flagsWinConditi
 TRef<TrekWindow> TrekWindow::Create(
     EffectApp*     papp,
     const ZString& strCommandLine,
-// BUILD_DX9
+#ifdef BUILD_DX9
 	const ZString& strArtPath,					// Added for DX9 build, due to reordered startup.
-// BUILD_DX9
+#endif // BUILD_DX9		
     bool           bMovies,
     bool           bSoftware,
     bool           bHardware,
@@ -11042,9 +11139,9 @@ TRef<TrekWindow> TrekWindow::Create(
         new TrekWindowImpl(
             papp,
             strCommandLine,
-// BUILD_DX9
+#ifdef BUILD_DX9
 			strArtPath,
-// BUILD_DX9
+#endif // BUILD_DX9
             bMovies,
             bSoftware,
             bHardware,

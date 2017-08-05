@@ -630,13 +630,7 @@ public:
             else {
                 m_peventSingleRightClick->Trigger();
             }
-		} else if(button == 8 && bDown) { //Imago 8/14/09 mouse wheel
-            NextItem();
-            SelectionChanged();
-        } else if(button == 9 && bDown) {
-            PreviousItem();
-            SelectionChanged();
-        }
+		}
 
         return MouseResult();
     }

@@ -274,7 +274,8 @@ public:
         m_pfn(pfn),
         m_psource(psource)
     {
-        m_psource->AddSink(this);
+		if(m_psource != NULL)
+			m_psource->AddSink(this);
     }
 
     TEventTarget(ObjectClass* pobject, 
@@ -290,7 +291,8 @@ public:
 
     void Disconnect()
     {
-        m_psource->RemoveSink(this);
+		if(m_psource != NULL)
+			m_psource->RemoveSink(this);
     }
 
     bool OnEvent(IEventSource* pevent)

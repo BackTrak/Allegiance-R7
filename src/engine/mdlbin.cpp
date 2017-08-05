@@ -1,6 +1,10 @@
 #include "pch.h"
 
+#ifdef DREAMCAST 
+#define _UNALIGNED __unaligned
+#else
 #define _UNALIGNED
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -288,7 +292,7 @@ private:
         //     ok.
         //
 
-        #if defined(_DEBUG)
+        #if defined(_DEBUG) && !defined(DREAMCAST)
             for(index = 0; index < countExports; index++) {
                 Value* pvalue = dynamic_cast<Value*>((IObject*)m_pobjects[index]);
 

@@ -1,6 +1,9 @@
 #include "pch.h"
 #include <zreg.h>
 
+// BT - STEAM
+#include "atlenc.h"
+#include <inttypes.h>
 
 // #define NO_CLUB_SERVER_CONNECTION 1 // comment out before checkin
 
@@ -63,6 +66,7 @@ private:
     ScreenID           m_screenPostConnect;
 
     static bool s_bWasAuthenticated;
+	HAuthTicket m_hAuthTicket = 0;
  
 public:
     ZoneClubScreen(Modeler* pmodeler, Number* ptime) :
@@ -270,8 +274,18 @@ public:
 #else
             lstrcpy(m_szName, trekClient.GetSavedCharacterName());
 #endif
-		  // wlp - don't ask for callsign if it was on the command line
-          if (!g_bAskForCallSign) 
+
+			// BT - Steam
+			bool isUserLoggedIntoSteam = SteamUser() != nullptr;
+
+			if (isUserLoggedIntoSteam == true)
+			{
+				
+				trekClient.SetCDKey(GetCDKeyFromSteamInfo());
+			}
+
+		  // wlp - don't ask for callsign if it was on the command line or if Steam is active. 
+          if (!g_bAskForCallSign || isUserLoggedIntoSteam == true)
 		  {
 		  this->OnLogon(trekClient.GetSavedCharacterName(), "", false);
 	      } // wlp - end of dont ask for callsign 
@@ -292,6 +306,50 @@ public:
 		    }// wlp = end of else ask for callsign
         }
     }
+
+	ZString GetCDKeyFromSteamInfo()
+	{
+		// Get the current users Steam name.
+		const char *name = SteamFriends()->GetPersonaName();
+		CSteamID id = SteamUser()->GetSteamID();
+		uint64 uid = id.ConvertToUint64();
+
+		CSteamID testID = CSteamID(uid);
+		bool isTestIDValid = testID.IsValid();
+
+		if (trekClient.GetSteamAuthTicketID() != 0)
+			SteamUser()->CancelAuthTicket(trekClient.GetSteamAuthTicketID());
+
+		char rgchToken[1024];
+		uint32 unTokenLen = 0;
+		m_hAuthTicket = SteamUser()->GetAuthSessionTicket(rgchToken, sizeof(rgchToken), &unTokenLen);
+		
+		trekClient.SetSteamAuthTicketID(m_hAuthTicket);
+
+		//msg.SetToken(rgchToken, unTokenLen);
+
+		char uuencodebuffer[2064];
+		int uuencodebufferLen = sizeof(uuencodebuffer);
+		UUEncode((BYTE *)rgchToken, unTokenLen, uuencodebuffer, &uuencodebufferLen);
+
+		uuencodebuffer[uuencodebufferLen] = '\0';
+
+		char cdKey[2100];
+		sprintf(cdKey, "%" PRIu64 ":%s", uid, uuencodebuffer);
+
+		char testDecodeValue[1024];
+		int testDecodeValueLen = sizeof(testDecodeValue);
+		UUDecode((BYTE *)uuencodebuffer, uuencodebufferLen, (BYTE *)testDecodeValue, &testDecodeValueLen);
+
+		for (int i = 0; i < unTokenLen; i++)
+		{
+			if (testDecodeValue[i] != rgchToken[i])
+				OutputDebugString("FAIL!\n");
+		}
+
+		// This is the combo of the user's CSteamID:AuthToken. It will need to be parsed by the lobby and the server.
+		return ZString(cdKey);
+	}
 
     
     bool OnButtonMainMenu()

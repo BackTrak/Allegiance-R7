@@ -250,8 +250,8 @@ struct Global
 //#if !defined(ALLSRV_STANDALONE) Imago commented 6/10
     ,
     csqlSilentThreads(0),
-    csqlNotifyThreads(0),
-    sql(&siteFedSrv)
+    csqlNotifyThreads(0)
+    //sql(&siteFedSrv)
 //#endif
 	//imagos crap for multi-process servers 6/25/08
 #if defined(SRV_PARENT)
@@ -349,7 +349,7 @@ struct Global
   bool                fDoublePrecision;
   //  CAdminSponsor<CAdminGames>  sponsorGames;
 //#if !defined(ALLSRV_STANDALONE) Imago commented 6/10
-  CSQLCore            sql;
+  //CSQLCore            sql;
   DWORD               csqlSilentThreads;
   DWORD               csqlNotifyThreads;
   CComBSTR            strSQLConfig;

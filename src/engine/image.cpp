@@ -16,14 +16,14 @@ public:
     // Value members
     //
 
-	ZString GetString(int indent)
-    {
-        return "emptyImage";
+	ZString GetString(int indent) 
+    { 
+        return "emptyImage"; 
     }
 
-    ZString GetFunctionName()
-    {
-        return "emptyImage";
+    ZString GetFunctionName() 
+    { 
+        return "emptyImage"; 
     }
 
     void Write(IMDLBinaryFile* pfile)
@@ -146,18 +146,6 @@ void ConstantImage::Write(IMDLBinaryFile* pmdlFile)
     m_psurface->Write(pfile);
 }
 
-//Imago 6/24/09 - removed the color hit-check check, see modeler.cpp(2520), these problems are related.
-MouseResult ConstantImage::HitTest(IInputProvider* pprovider, const Point& point, bool bCaptured)
-{
-
-    if (m_bounds.GetRect().Inside(point)) {
-        return MouseResultHit();
-    }
-
-    return MouseResult();
-}
-
-/*
 MouseResult ConstantImage::HitTest(IInputProvider* pprovider, const Point& point, bool bCaptured)
 {
     if (m_bounds.GetRect().Inside(point)) {
@@ -175,9 +163,6 @@ MouseResult ConstantImage::HitTest(IInputProvider* pprovider, const Point& point
 
     return MouseResult();
 }
-*/
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -391,11 +376,11 @@ public:
             int      x;
 
             if (m_justification == JustifyLeft()) {
-                x = 0;
+                x = 0;                      
             } else if (m_justification == JustifyRight()) {
-                x = m_width - size.X();
+                x = m_width - size.X();     
             } else if (m_justification == JustifyCenter()) {
-                x = (m_width - size.X()) / 2;
+                x = (m_width - size.X()) / 2; 
             } else {
                 ZError("Invalid Justification");
             }
@@ -450,8 +435,8 @@ private:
 
 public:
     GaugeImage(
-        Justification justification,
-        Image*        pimage,
+        Justification justification, 
+        Image*        pimage, 
         const         Rect& rect,
         bool          b3D,
         Number*       pnumber
@@ -464,8 +449,8 @@ public:
     }
 
     GaugeImage(
-        Justification justification,
-        Image*        pimage,
+        Justification justification, 
+        Image*        pimage, 
         bool          b3D,
         Number*       pnumber
     ) :
@@ -501,10 +486,10 @@ public:
         TRef<Surface> psurface = GetImage()->GetSurface();
         float         number   = GetNumber()->GetValue();
 
-		// kg - fix NaN & infinity to avoid odd rendering
-		if (_isnan(number) || !_finite(number)) number = 0.0f;
-
         number = bound(number, 0.0f, 1.0f);
+
+		// KGJV - fix: NaN value to 0
+		if (_isnan(number)) number = 0.0f;
 
         Rect  rect = m_rect;
         Point offset(0, 0);
@@ -564,8 +549,8 @@ TRef<Image> CreateGaugeImage(Justification justification, Image* pimage, bool b3
 }
 
 TRef<Image> CreateGaugeImage(
-    Justification justification,
-    Image* pimage,
+    Justification justification, 
+    Image* pimage, 
     const Rect& rect,
     bool b3D,
     Number* pnumber
@@ -586,15 +571,6 @@ AnimatedImage::AnimatedImage(Number* ptime, AnimatedImage* pimage) :
 {
 }
 
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// AnimatedImage()
-// Create the resources for an animated image.
-// The original source for the animated image in psurfaceSource, which is one large image.
-// The original image is then broken up into square frames, and stored as individual textures, which
-// are then added the m_psurfaces list.
-////////////////////////////////////////////////////////////////////////////////////////////////////
 AnimatedImage::AnimatedImage(Number* ptime, Surface* psurfaceSource, int nRows, int nCols) :
     Image(ptime),
     m_index(0)
@@ -624,18 +600,17 @@ AnimatedImage::AnimatedImage(Number* ptime, Surface* psurfaceSource, int nRows, 
                 TRef<Surface> psurfaceTextureSource =
                     psurfaceSource->CreateCompatibleSurface(WinPoint(size, size), SurfaceType2D());
 
-				// Set the colour key, and store in the vector of surfaces.
+                ZAssert(size == w && size == h);
+
+                psurfaceTextureSource->FillSurfaceWithColorKey();
+
+                psurfaceTextureSource->BitBlt(
+                    WinPoint(0, 0), 
+                    psurfaceSource, 
+                    WinRect(x, y, x + size, y + size)
+                );
+
                 psurfaceTextureSource->SetColorKey(Color(0, 0, 0));
-
-				ZAssert(size == w && size == h);
-
-				// Fill the new texture with the colour key.
-//                psurfaceTextureSource->FillSurfaceWithColorKey();
-
-				// Copy in a portion of the original image into the new texture.
-//				psurfaceTextureSource->BitBlt(	WinPoint(0, 0), psurfaceSource, WinRect(x, y, x + size, y + size) );
-				psurfaceTextureSource->CopySubsetFromSrc( WinPoint(0, 0), psurfaceSource, WinRect(x, y, x + size, y + size) );
-
                 m_psurfaces.Set(index, psurfaceTextureSource);
             }
         }
@@ -663,12 +638,12 @@ MouseResult AnimatedImage::HitTest(IInputProvider* pprovider, const Point& point
 
     Surface* psurface = GetSurface();
 
-    bool bHit =
+    bool bHit = 
            (!psurface->HasColorKey())
         || psurface->GetColor(WinPoint((int)point.X(), (int)point.Y())) != psurface->GetColorKey();
 
     psurface->ReleasePointer();
-
+    
     if (bHit) {
         return MouseResultHit();
     }
@@ -682,15 +657,15 @@ MouseResult AnimatedImage::HitTest(IInputProvider* pprovider, const Point& point
 //
 //////////////////////////////////////////////////////////////////////////////
 
-void WrapImage::SetImage(Image* pvalue)
-{
+void WrapImage::SetImage(Image* pvalue) 
+{ 
     if (pvalue != GetImage()) {
         if (m_bHasCapture) {
             RemoveCapture();
             m_bHasCapture = false;
         }
 
-        SetChild(0, pvalue);
+        SetChild(0, pvalue); 
     }
 }
 
@@ -751,7 +726,7 @@ MouseResult WrapImage::Button(IInputProvider* pprovider, const Point& point, int
     TRef<Image>     pimage = GetImage();
 
     MouseResult result = pimage->Button(pprovider, point, button, bCaptured, bInside, bDown);
-
+    
     if (result.Test(MouseResultRelease())) {
         m_bHasCapture = false;
     } else if (result.Test(MouseResultCapture())) {
@@ -1515,7 +1490,7 @@ TRef<Image> CreateBlendImage(Image* pimage, BlendMode blendMode)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -1557,7 +1532,7 @@ TRef<Image> CreateColorImage(ColorValue* pcolor)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -1600,7 +1575,7 @@ TRef<Image> CreateExtentImage(RectValue* prect, ColorValue* pcolor)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -1637,7 +1612,7 @@ TRef<Image> CreateTransparentImage()
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -1697,7 +1672,7 @@ TRef<Image> CreateVisibleImage(Image* pimage, Boolean* bShow)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 
@@ -1805,7 +1780,7 @@ TRef<Image> CreateJustifyImage(Image* pimage, Justification justification)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//
+// 
 //
 //////////////////////////////////////////////////////////////////////////////
 

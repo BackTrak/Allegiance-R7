@@ -13,8 +13,6 @@
 #ifndef _TRAINING_H_
 #define _TRAINING_H_
 
-ZString GetKeyName(TrekKey tk);
-
 namespace Training
 {
     //------------------------------------------------------------------------------

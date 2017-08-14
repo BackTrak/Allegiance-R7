@@ -238,27 +238,30 @@ public:
     //
     //////////////////////////////////////////////////////////////////////////////
 
-	void DrawExpandedBlip(Context* pcontext, float radius, Surface* psurface, const Color& color)
-	{
-		Point size = Point::Cast(psurface->GetSize());
-		float xsize = size.X();
-		float ysize = size.Y();
+    void DrawExpandedBlip(Context* pcontext, float radius, Surface* psurface, const Color& color)
+    {
+        Point size  = Point::Cast(psurface->GetSize());
+        float xsize = size.X();
+        float ysize = size.Y();
 
-		float xsizeMid = xsize / 2;
-		float ysizeMid = ysize / 2;
+        float xsizeMid = xsize / 2;
+        float ysizeMid = ysize / 2;
 
-		float delta = radius / sqrt2;
-		{
-			float   m = xsizeMid / 2;
-			if (delta < m)
-				delta = m;
-		}
+        float delta = radius / sqrt2;
+        {
+            float   m = xsizeMid / 2;
+            if (delta < m)
+                delta = m;
+        }
 
-		pcontext->DrawImage3D(psurface, Rect(0, 0, xsizeMid, ysizeMid), color, true, Point(-delta, -delta));
-		pcontext->DrawImage3D(psurface, Rect(xsizeMid, 0, xsize, ysizeMid), color, true, Point(delta, -delta));
-		pcontext->DrawImage3D(psurface, Rect(xsizeMid, ysizeMid, xsize, ysize), color, true, Point(delta, delta));
-		pcontext->DrawImage3D(psurface, Rect(0, ysizeMid, xsizeMid, ysize), color, true, Point(-delta, delta));
-	}
+		pcontext->SetBlendMode(BlendModeSourceAlpha); //imago 7/15/09
+        CD3DDevice9::Get()->SetRenderState( D3DRS_MULTISAMPLEANTIALIAS, FALSE );
+        pcontext->DrawImage3D(psurface, Rect(       0,        0, xsizeMid, ysizeMid), color, true, Point(-delta, -delta));
+        pcontext->DrawImage3D(psurface, Rect(xsizeMid,        0,    xsize, ysizeMid), color, true, Point( delta, -delta));
+        pcontext->DrawImage3D(psurface, Rect(xsizeMid, ysizeMid,    xsize,    ysize), color, true, Point( delta,  delta));
+        pcontext->DrawImage3D(psurface, Rect(       0, ysizeMid, xsizeMid,    ysize), color, true, Point(-delta,  delta));
+        CD3DDevice9::Get()->SetRenderState( D3DRS_MULTISAMPLEANTIALIAS, TRUE );
+    }
 
     //////////////////////////////////////////////////////////////////////////////
     //
@@ -1091,210 +1094,218 @@ public:
     //
     //////////////////////////////////////////////////////////////////////////////
 
-	void Render(Context* pcontext)
-	{
+    void Render(Context* pcontext)
+    {
 		if (m_radarLOD != c_rlNone)
-		{
-			//
-			// Use flat shading
-			//
-			pcontext->SetShadeMode(ShadeModeFlat);
-			pcontext->SetLinearFilter(false, true);
+        {
+            //
+            // Use flat shading
+            //
+            pcontext->SetShadeMode(ShadeModeFlat);
+            pcontext->SetLinearFilter(false, true);
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP );
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP );
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSW, D3DTADDRESS_CLAMP );
 
 			//
 			// Shrink the rect size by half the size of the gauge bitmap
 			// and center the rect around the origin
 			//
-			Rect  rectImage = GetViewRect()->GetValue();
-			{
-				Point pointCenter = rectImage.Center();
+            Rect  rectImage   = GetViewRect()->GetValue();
+            {
+			    Point pointCenter = rectImage.Center();
 
-				pcontext->Translate(pointCenter);
-			}
+			    pcontext->Translate(pointCenter);
+            }
 
 			//
 			// Draw the round border if appropriate
-			//
-			if (GetWindow()->GetRoundRadarMode())
-				RenderRoundBorder(pcontext, rectImage);
+            //
+            if (GetWindow ()->GetRoundRadarMode ())
+			    RenderRoundBorder (pcontext, rectImage);
 
 			//
 			// Draw some Blips
-			//
+            //
 
 			RenderBlips(pcontext, rectImage);
 
-			//
-			// Draw the text
-			//
+            //
+            // Draw the text
+            //
 
-			TRef<IEngineFont> pfont = TrekResources::SmallFont();
+            TRef<IEngineFont> pfont = TrekResources::SmallFont();
 
-			float heightFont = float(pfont->GetHeight());
+            float heightFont = float(pfont->GetHeight());
 
-			TextDataList::Iterator iter(m_listTextData);
-			while (!iter.End())
-			{
-				const TextData& data = iter.Value();
+            TextDataList::Iterator iter(m_listTextData);
+            while (!iter.End())
+            {
+                const TextData& data = iter.Value();
 
-				float   lines = 0.0f;
-				float   width = 0.0f;
-				if (data.m_pszName[0] != '\0')
-				{
-					float   w = (float)(pfont->GetTextExtent(data.m_pszName).X());
-					if (w > width)
-						width = w;
+                float   lines = 0.0f;
+                float   width = 0.0f;
+                if (data.m_pszName[0] != '\0')
+                {
+                    float   w = (float)(pfont->GetTextExtent(data.m_pszName).X());
+                    if (w > width)
+                        width = w;
 
-					lines += 1.0f;
-				}
+                    lines += 1.0f;
+                }
 
-				char    szRange[20];
-				if (data.m_range > 0)
-				{
-					_itoa(data.m_range, szRange, 10);
-					float   w = (float)(pfont->GetTextExtent(szRange).X());
-					if (w > width)
-						width = w;
+                char    szRange[20];
+                if (data.m_range > 0)
+                {
+                    _itoa(data.m_range, szRange, 10);
+                    float   w = (float)(pfont->GetTextExtent(szRange).X());
+                    if (w > width)
+                        width = w;
 
-					lines += 1.0f;
-				}
+                    lines += 1.0f;
+                }
 
-				if (data.m_shield <= 1.0f)
-				{
-					lines += 0.5f;
-				}
-				if (data.m_hull <= 1.0f)
-				{
-					lines += 0.5f;
-				}
-				if (data.m_fill <= 1.0f)
-				{
-					lines += 0.5f;
-				}
+                if (data.m_shield <= 1.0f)
+                {
+                    lines += 0.5f;
+                }
+                if (data.m_hull <= 1.0f)
+                {
+                    lines += 0.5f;
+                }
+                if (data.m_fill <= 1.0f)
+                {
+                    lines += 0.5f;
+                }
 
-				Surface*    psurfaceIcon = NULL;
-				float       xshift;
+                Surface*    psurfaceIcon = NULL;
+                float       xshift;
 
-				if (data.m_cid != c_cidNone)
-				{
-					assert(data.m_cid >= 0);
-					assert(data.m_cid < c_cidMax);
-					psurfaceIcon = (data.m_cmd != c_cmdQueued) ? m_psurfaceAccepted[data.m_cid] : m_psurfaceQueued[data.m_cid];
-					if (psurfaceIcon)
-					{
-						Point size = Point::Cast(psurfaceIcon->GetSize());
-						xshift = size.X();
-						width += xshift;
-					}
-				}
+                if (data.m_cid != c_cidNone)
+                {
+                    assert (data.m_cid >= 0);
+                    assert (data.m_cid < c_cidMax);
+                    psurfaceIcon = (data.m_cmd != c_cmdQueued) ? m_psurfaceAccepted[data.m_cid] :  m_psurfaceQueued[data.m_cid];
+                    if (psurfaceIcon)
+                    {
+                        Point size  = Point::Cast(psurfaceIcon->GetSize());
+                        xshift = size.X();
+                        width += xshift;
+                    }
+                }
 
-				//Find the offset to center the text at position + offset
-				Point   offset(data.m_position.X() - 0.5f * width, data.m_position.Y() + heightFont * 0.5f * (lines - 2.0f));
+                //Find the offset to center the text at position + offset
+                Point   offset(data.m_position.X() - 0.5f * width, data.m_position.Y()  + heightFont * 0.5f * (lines - 2.0f));
 
-				//Adjust the offset by the amount required to move a point from the center to the edge
-				//in the specified direction
-				{
-					float   w = width + 15.0f;
-					float   h = heightFont * lines + 15.0f;
+                //Adjust the offset by the amount required to move a point from the center to the edge
+                //in the specified direction
+                {
+                    float   w = width + 15.0f;
+                    float   h = heightFont * lines + 15.0f;
 
-					float   x = data.m_direction.X();
-					float   y = data.m_direction.Y();
+                    float   x = data.m_direction.X();
+                    float   y = data.m_direction.Y();
 
-					if (x == 0.0f)
-						y = (y < 0.0f) ? -h : h;
-					else if (y == 0.0f)
-						x = (x <= 0.0f) ? -w : w;
-					else
-					{
-						float   tX = w / float(fabs(x));
-						float   tY = h / float(fabs(y));
-						float   tMin = (tX < tY) ? tX : tY;
+                    if (x == 0.0f)
+                        y = (y < 0.0f) ? -h : h;
+                    else if (y == 0.0f)
+                        x = (x <= 0.0f) ? -w : w;
+                    else
+                    {
+                        float   tX = w / float(fabs(x));
+                        float   tY = h / float(fabs(y));
+                        float   tMin = (tX < tY) ? tX : tY;
 
-						x *= tMin;
-						y *= tMin;
-					}
+                        x *= tMin;
+                        y *= tMin;
+                    }
 
-					offset.SetX(offset.X() + x * 0.5f);
-					offset.SetY(offset.Y() + y * 0.5f);
+                    offset.SetX(offset.X() + x * 0.5f);
+                    offset.SetY(offset.Y() + y * 0.5f);
 
-					if (psurfaceIcon)
-					{
-						offset.SetX(offset.X() + xshift * 0.5f);
-						pcontext->DrawImage3D(psurfaceIcon, data.m_color, true, offset);
-						offset.SetX(offset.X() + xshift * 0.5f);
-					}
-				}
+                    if (psurfaceIcon)
+                    {
+                        offset.SetX(offset.X() + xshift * 0.5f);
+                        pcontext->DrawImage3D(psurfaceIcon, data.m_color, true, offset);
+                        offset.SetX(offset.X() + xshift * 0.5f);
+                    }
+                }
 
-				if (data.m_pszName[0] != '\0')
-				{
-					pcontext->DrawString(pfont, data.m_color, offset, ZString(data.m_pszName));
-					offset.SetY(offset.Y() - heightFont);
-				}
+                if (data.m_pszName[0] != '\0')
+                {
+                    pcontext->DrawString(pfont, data.m_color, offset, ZString(data.m_pszName));
+                    offset.SetY(offset.Y() - heightFont);
+                }
 
-				if (data.m_range > 0)
-				{
-					pcontext->DrawString(pfont, data.m_color, offset, ZString(szRange));
-					offset.SetY(offset.Y() - heightFont);
-				}
+                if (data.m_range > 0)
+                {
+                    pcontext->DrawString(pfont, data.m_color, offset, ZString(szRange));
+                    offset.SetY(offset.Y() - heightFont);
+                }
 
-				if ((data.m_hull <= 1.0f) || (data.m_fill <= 1.0f))
-				{
-					const float c_width = 16.0f;
+                if ((data.m_hull <= 1.0f) || (data.m_fill <= 1.0f))
+                {
+                    CD3DDevice9::Get()->SetRenderState( D3DRS_MULTISAMPLEANTIALIAS, FALSE ); //8/8/09 Imago
+                    const float c_width = 16.0f;
 
-					float   xOffset = float(floor(offset.X()));
-					float   yOffset = float(floor(offset.Y() + heightFont - 4.0f));
+                    float   xOffset = float(floor(offset.X()));
+                    float   yOffset = float(floor(offset.Y() + heightFont - 4.0f));
 
-					// draw the ore fill state if needed
-					if (data.m_fill <= 1.0f)
-					{
-						Rect    rectFill(xOffset, yOffset, xOffset + (c_width * data.m_fill), yOffset + 2.0f);
-						pcontext->FillRect(rectFill, data.m_color);
-						// if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
-						if (data.m_fill < 1.0f)
-						{
-							rectFill.SetXMin(rectFill.XMax());
-							rectFill.SetXMax(xOffset + c_width);
-							pcontext->FillRect(rectFill, Color(0.333f, 0.0f, 0.0f));
-						}
-						yOffset -= 4.0f;
-					}
+                    // draw the ore fill state if needed
+                    if (data.m_fill <= 1.0f)
+                    {
+                        Rect    rectFill  (xOffset, yOffset, xOffset + (c_width * data.m_fill), yOffset + 2.0f);
+                        pcontext->FillRect (rectFill, data.m_color);
+                        // if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
+                        if (data.m_fill < 1.0f)
+                        {
+                            rectFill.SetXMin(rectFill.XMax());
+                            rectFill.SetXMax(xOffset + c_width);
+                            pcontext->FillRect(rectFill, Color(0.333f, 0.0f, 0.0f));
+                        }
+                        yOffset -= 4.0f;
+                    }
 
-					// if shield is valid, draw it and update the hull bar location
-					if (data.m_shield <= 1.0f)
-					{
-						Rect    rectShield(xOffset, yOffset, xOffset + c_width * data.m_shield, yOffset + 2.0f);
-						pcontext->FillRect(rectShield, data.m_color);
-						// if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
-						if (data.m_shield < 1.0f)
-						{
-							rectShield.SetXMin(rectShield.XMax());
-							rectShield.SetXMax(xOffset + c_width);
-							pcontext->FillRect(rectShield, Color(1.0f, 0.0f, 0.0f));
-						}
-						yOffset -= 4.0f;
-					}
+                    // if shield is valid, draw it and update the hull bar location
+                    if (data.m_shield <= 1.0f)
+                    {
+                        Rect    rectShield (xOffset, yOffset, xOffset + c_width * data.m_shield, yOffset + 2.0f);
+                        pcontext->FillRect (rectShield, data.m_color);
+                        // if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
+                        if (data.m_shield < 1.0f)
+                        {
+                            rectShield.SetXMin(rectShield.XMax());
+                            rectShield.SetXMax(xOffset + c_width);
+                            pcontext->FillRect(rectShield, Color(1.0f, 0.0f, 0.0f));
+                        }
+                        yOffset -= 4.0f;
+                    }
 
-					// if hull is valid, so draw it and update the hull bar location
-					if (data.m_hull <= 1.0f)
-					{
-						Rect    rectHull(xOffset, yOffset, xOffset + c_width * data.m_hull, yOffset + 2.0f);
-						pcontext->FillRect(rectHull, data.m_color);
-						// if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
-						if (data.m_hull < 1.0f)
-						{
-							rectHull.SetXMin(rectHull.XMax());
-							rectHull.SetXMax(xOffset + c_width);
-							pcontext->FillRect(rectHull, Color(1.0f, 0.0f, 0.0f));
-						}
-					}
-				}
+                    // if hull is valid, so draw it and update the hull bar location
+                    if (data.m_hull <= 1.0f)
+                    {
+                        Rect    rectHull  (xOffset, yOffset, xOffset + c_width * data.m_hull,   yOffset + 2.0f);
+                        pcontext->FillRect(rectHull, data.m_color);
+                        // if the value isn't 1.0f, the bar has two parts, here we draw the "empty" part
+                        if (data.m_hull < 1.0f)
+                        {
+                            rectHull.SetXMin(rectHull.XMax());
+                            rectHull.SetXMax(xOffset + c_width);
+                            pcontext->FillRect(rectHull, Color(1.0f, 0.0f, 0.0f));
+                        }
+                    }
+                    CD3DDevice9::Get()->SetRenderState( D3DRS_MULTISAMPLEANTIALIAS, TRUE ); //8/8/09 Imago
+                }
 
-				iter.Next();
-			}
+                iter.Next();
+            }
 
-			m_listTextData.SetEmpty();
-		}
-	}
+            m_listTextData.SetEmpty();
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP );
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP );
+            CD3DDevice9::Get()->SetSamplerState(0, D3DSAMP_ADDRESSW, D3DTADDRESS_WRAP );
+        }
+    }
 };
 
 Color RadarImageImpl::s_colorNeutral(1, 1, 1);

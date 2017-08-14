@@ -1,8 +1,6 @@
 #ifndef _context_h_
 #define _context_h_
 
-#include <d3dtypes.h>
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // Plane
@@ -317,7 +315,7 @@ public:
     }
 #endif
 
-inline Color MakeColor(const D3DCOLORVALUE& color)
+inline Color MakeColor(const COLORVALUE& color) // was D3DCOLORVALUE
 {
     return
         Color(
@@ -645,7 +643,9 @@ enum ShadeMode {
 enum BlendMode {
     BlendModeSource,
     BlendModeAdd,
-    BlendModeSourceAlpha
+    BlendModeSourceAlpha,
+	BlendModeSourceAlphaTest,
+	BlendModeAlphaStampThrough
 };
 
 enum WrapMode {
@@ -773,7 +773,10 @@ public:
     // 3D Transforms
     //
 
-    virtual void SetTransform(const Matrix& mat)        = 0;
+	virtual void SetPerspectiveMatrix( Camera * pcamera) = 0;
+	virtual void SetViewMatrix(Camera * pcamera) = 0;
+    virtual void SetTransform(const Matrix& mat, const Matrix& matWorldTM)        = 0;
+
     virtual void Multiply(const Matrix& mat)            = 0;
     virtual void Rotate(const Vector& vec, float angle) = 0;
     virtual void Translate(const Vector& vec)           = 0;
@@ -885,7 +888,10 @@ public:
     virtual void DrawTriangles(const TVector<Vertex>&    vertices, const TVector<MeshIndex>& indices) = 0;
     virtual void DrawTriangles(const TVector<VertexL>&   vertices, const TVector<MeshIndex>& indices) = 0;
 
-    //
+	virtual void DrawTriangles(	const CVBIBManager::SVBIBHandle * phVB, 
+								const CVBIBManager::SVBIBHandle * phIB ) = 0;
+
+	//
     // Decals
     //
 

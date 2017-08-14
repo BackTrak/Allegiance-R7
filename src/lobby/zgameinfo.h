@@ -1,13 +1,8 @@
 #ifndef __GAMEINFO_H
 #define __GAMEINFO_H
 
-// BT - STEAM
-// Changing types to match what's defined in steamtypes.h to prevent compiler error.
-typedef unsigned __int32	uint32;
-typedef __int32				int32;
-//typedef unsigned long		uint32;
-//typedef long				int32;
-
+typedef unsigned long		uint32;
+typedef long				int32;
 typedef unsigned short		uint16;
 typedef short				int16;
 typedef unsigned char		uchar;

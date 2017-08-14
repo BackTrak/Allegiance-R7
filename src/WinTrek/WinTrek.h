@@ -76,8 +76,6 @@ class  WinTrekClient :
         TRef<AnimatedImage> LoadExplosionImage(const ZString& str);
         bool OnEvent(IIntegerEventSource* pevent, int value);
 
-		HAuthTicket m_hAuthTicket = 0;
-
     public:
         WinTrekClient(void);
         ~WinTrekClient(void);
@@ -244,11 +242,6 @@ class  WinTrekClient :
 
         virtual void      OnReload(IpartIGC* ppart, bool bConsumed);
         virtual void      Preload(const char* pszModelName, const char* pszTextureName);
-
-		// BT - STEAM
-		virtual void		SetSteamAuthTicketID(HAuthTicket hAuthTicket);
-		virtual HAuthTicket	GetSteamAuthTicketID();
-
         virtual void      SetCDKey(const ZString& strCDKey);
         virtual void      ChangeGameState(void) { GetWindow()->UpdateGameStateContainer(); }
 

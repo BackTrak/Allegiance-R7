@@ -6,7 +6,7 @@
 
 #include "pch.h"
 #include "ddraw.h"
-#include "d3d.h"
+//#include "d3d.h"
 //#include "d3drm.h"
 #include "dinput.h"
 
@@ -350,7 +350,7 @@ HRESULTInfo gpinfo[] =
     /******************/
     /*** D3D Errors ***/
     /******************/
-
+/*
 
     {D3DERR_BADMAJORVERSION, "D3DERR_BADMAJORVERSION",
         "Bad major version"},
@@ -454,12 +454,12 @@ HRESULTInfo gpinfo[] =
     {D3DERR_SCENE_END_FAILED, "D3DERR_SCENE_END_FAILED",
         "Scene end failed"},
 
-
+*/
     /*************************************/
     /*** Direct3D Retained-Mode Errors ***/
     /*************************************/
-
-    /*{D3DRMERR_BADOBJECT, "D3DRMERR_BADOBJECT",
+/*
+    {D3DRMERR_BADOBJECT, "D3DRMERR_BADOBJECT",
         "Object expected in argument"},
 
     {D3DRMERR_BADTYPE, "D3DRMERR_BADTYPE",

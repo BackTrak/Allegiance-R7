@@ -281,9 +281,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# VS2017 Files
-.vs/
 
-# winmerge
-*.bak
-*.old
+# VS2017 Files
+
+.vs/

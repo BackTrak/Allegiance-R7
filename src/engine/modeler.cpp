@@ -74,11 +74,13 @@ public:
 class PaneImageFactory : public IFunction {
 private:
     TRef<Engine> m_pengine;
+	TRef<Modeler> m_pmodeler;
 
 public:
     PaneImageFactory(
         Modeler* pmodeler
     ) :
+		m_pmodeler(pmodeler),
         m_pengine(pmodeler->GetEngine())
     {
     }
@@ -95,11 +97,14 @@ public:
             stype.Set(SurfaceTypeZBuffer());
         }
 
+		bool bColorKey = pbooleanColorKey->GetValue() || m_pmodeler->GetColorKeyHint();
+
         return (Value*)
             CreatePaneImage(
                 m_pengine,
                 stype,
-                pbooleanColorKey->GetValue(),
+//                pbooleanColorKey->GetValue(),
+				bColorKey,
                 ppane
             );
     }
@@ -612,35 +617,43 @@ public:
 };
 
 
-//////////////////////////////////////////////////////////////////////////////
-// KGJV 32B
-//
-// ImportImageFromFile file factory (png,...)
-//////////////////////////////////////////////////////////////////////////////
-unsigned DLL_CALLCONV
-myReadProc(void *buffer, unsigned size, unsigned count, fi_handle handle) {
-    ZFile *zf = (ZFile *)handle;
-	return zf->Read(buffer,size*count); // fread(buffer, size, count, (FILE *)handle);
-}
-
-//unsigned DLL_CALLCONV
-//myWriteProc(void *buffer, unsigned size, unsigned count, fi_handle handle) {
-//    ZFile *zf = (ZFile *)handle;
-//	return fwrite(buffer, size, count, (FILE *)handle);
-//}
-
-int DLL_CALLCONV
-mySeekProc(fi_handle handle, long offset, int origin) {
-    ZFile *zf = (ZFile *)handle;
-    return zf->Seek(offset, origin);
-}
-
-long DLL_CALLCONV
-myTellProc(fi_handle handle) {
-    ZFile *zf = (ZFile *)handle;
-	return zf->Tell(); //ftell((FILE *)handle);
-}
-
+class ZPackFile : public ZFile
+{
+protected:
+	DWORD m_dwFileSize;
+	PathString m_strPath;
+public:
+	ZPackFile(const PathString& strPath, void * pData, DWORD dwFileSize )
+	{
+		m_p = (BYTE*) pData;
+		m_dwFileSize = dwFileSize;
+		m_strPath = strPath;
+	}
+	~ZPackFile()
+	{
+		m_p = NULL;
+		m_dwFileSize = 0;
+	}
+	bool  IsValid()
+	{
+		return ( m_p != NULL );
+	}
+	int   GetLength()
+	{
+		return (int) m_dwFileSize;
+	}
+	BYTE * GetPointer(bool bWrite = false, bool bCopyOnWrite = false)
+	{
+		_ASSERT( !bWrite && !bCopyOnWrite );
+		return m_p;
+	}
+    DWORD Read(void* p, DWORD length)
+	{
+		_ASSERT( length <= m_dwFileSize );
+		memcpy( p, m_p, length );
+		return length;
+	}
+};
 
 
 class ImportImageFromFileFactory : public IFunction {
@@ -660,73 +673,102 @@ public:
         ZString  str    = GetString((IObject*)stack.Pop());
         bool     b      = GetBoolean((IObject*)stack.Pop());
 
-		ZDebugOutput("Loading target with free image: " + str);
-
-		/*ZString target = "minimappanel.png";
-		bool skip = false;
-		if (target == str)
-		{
-			ZDebugOutput("Break! " + target);
-			skip = true;
-			str = "creategamebkgnd.png";
-		}*/
-
-
         TRef<ZFile> zf = m_pmodeler->GetFile(str,"",true);
+		ZFile * pFile = (ZFile*) zf;
+		
+		D3DXIMAGE_INFO fileInfo;
+		if( D3DXGetImageInfoFromFileInMemory(	pFile->GetPointer(),
+												pFile->GetLength(),
+												&fileInfo ) == D3D_OK )
+		{
+			_ASSERT( fileInfo.ResourceType == D3DRTYPE_TEXTURE );
+			
+			// We can resize non-UI textures.
+			WinPoint targetSize( fileInfo.Width, fileInfo.Height );
+			bool bColourKey = m_pmodeler->GetColorKeyHint();
 
-        FreeImageIO fio;
-        fio.read_proc = myReadProc;
-        fio.seek_proc = mySeekProc;
-        fio.tell_proc = myTellProc;
+			if( m_pmodeler->GetUIImageUsageHint() == false )
+			{
+				DWORD dwMaxTextureSize = CD3DDevice9::Get()->GetMaxTextureSize();
+				_ASSERT( dwMaxTextureSize >= 256 );
+				while(	( targetSize.x > (LONG)dwMaxTextureSize ) ||
+						( targetSize.y > (LONG)dwMaxTextureSize ) )
+				{
+					targetSize.x = targetSize.x >> 1;
+					targetSize.y = targetSize.y >> 1;
+				}
+			}
+			// For D3D9, we only allow black colour keys.
+			TRef<Surface> psurface =
+				m_pengine->CreateSurfaceD3DX(
+					&fileInfo,
+					&targetSize,
+					zf,
+					bColourKey,
+					Color( 0, 0, 0 ),
+					str );
+			return (Value*)new ConstantImage(psurface, ZString());
+		}
+		else
+		{
+			_ASSERT( false && "Failed to load image." );
+		}
 
-        FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeFromHandle(&fio,zf);
-        if (fif != FIF_UNKNOWN)
-        {
-            FIBITMAP * dib = FreeImage_LoadFromHandle(fif,&fio,zf,PNG_IGNOREGAMMA);
-			//FIBITMAP * dib = FreeImage_LoadFromHandle(fif, &fio, zf, 0);
-
-            if (dib)
-            {
-                int bpp = FreeImage_GetBPP(dib);
-                assert((bpp == 16) || (bpp==24) || (bpp==32));
-                debugf("%s = %d bpp\n",(const char *)str,bpp);
-                UINT redm = FreeImage_GetRedMask(dib);
-                UINT grnm = FreeImage_GetGreenMask(dib);
-                UINT blum = FreeImage_GetBlueMask(dib);
-                UINT alpm = (bpp==32)?0xFF000000:0;
-                PixelFormat* ppf = m_pengine->GetPixelFormat(
-                    bpp,
-                    redm,
-                    grnm,
-                    blum,
-                    alpm
-                );  
-
-                // engine handles bitmaps mirrored ... yeeee
-                FreeImage_FlipHorizontal(dib);
-                FreeImage_FlipVertical(dib);
-                FreeImage_FlipHorizontal(dib);
-
-                TRef<Surface> psurface =
-                    m_pengine->CreateSurface(
-                    WinPoint(FreeImage_GetWidth(dib),FreeImage_GetHeight(dib)),
-                    ppf,
-                    NULL,
-                    FreeImage_GetPitch(dib),
-                    FreeImage_GetBits(dib),
-                    zf
-                );
-                //FreeImage_Unload(dib); never free 
-                
-                if (b) {
-                    // could use FreeImage_HasBackgroundColor/FreeImage_GetBackgroundColor here
-                    // or extend MDL syntax to pass the transp color
-                    psurface->SetColorKey(Color(0, 0, 0));
-                }
-
-                return (Value*)new ConstantImage(psurface, ZString());
-            }
-        }
+		// Replace FreeImage stuff with D3DX calls.
+//        FreeImageIO fio;
+//        fio.read_proc = myReadProc;
+//        fio.seek_proc = mySeekProc;
+//        fio.tell_proc = myTellProc;
+//
+//        FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeFromHandle(&fio,zf);
+//        if (fif != FIF_UNKNOWN)
+//        {
+//            FIBITMAP * dib = FreeImage_LoadFromHandle(fif,&fio,zf,PNG_IGNOREGAMMA);
+//            if (dib)
+//            {
+//                int bpp = FreeImage_GetBPP(dib);
+//                assert((bpp == 16) || (bpp==24) || (bpp==32));
+//                debugf("%s = %d bpp\n",(const char *)str,bpp);
+//                UINT redm = FreeImage_GetRedMask(dib);
+//                UINT grnm = FreeImage_GetGreenMask(dib);
+//                UINT blum = FreeImage_GetBlueMask(dib);
+//                UINT alpm = (bpp==32)?0xFF000000:0;
+//                PixelFormat* ppf = m_pengine->GetPixelFormat(
+//                    bpp,
+//                    redm,
+//                    grnm,
+//                    blum,
+//                    alpm
+//                );  
+//
+//                // engine handles bitmaps mirrored ... yeeee
+//                FreeImage_FlipHorizontal(dib);
+//                FreeImage_FlipVertical(dib);
+//                FreeImage_FlipHorizontal(dib);
+//
+//				// For D3D9, we only allow black colour keys.
+//                TRef<Surface> psurface =
+//                    m_pengine->CreateSurface(
+//                    WinPoint(FreeImage_GetWidth(dib),FreeImage_GetHeight(dib)),
+//                    ppf,
+////                    NULL,				// Remove palette.
+//                    FreeImage_GetPitch(dib),
+//                    FreeImage_GetBits(dib),
+//					zf,
+//					true,
+//					Color( 0, 0, 0 ),
+//					str );
+//                //FreeImage_Unload(dib); never free 
+//                
+//                if (b) {
+//                    // could use FreeImage_HasBackgroundColor/FreeImage_GetBackgroundColor here
+//                    // or extend MDL syntax to pass the transp color
+//                    psurface->SetColorKey(Color(0, 0, 0));
+//                }
+//
+//                return (Value*)new ConstantImage(psurface, ZString());
+//            }
+//        }
         debugf("ImportImageFromFileFactory: error reading file %s\n",(const char *)str);
         return NULL;
     }
@@ -740,7 +782,7 @@ public:
 
 class ImportImageFactory : public IFunction {
 private:
-    TRef<Modeler>     m_pmodeler;
+    TRef<Modeler>		m_pmodeler;
     TRef<PrivateEngine> m_pengine;
 
 public:
@@ -762,40 +804,30 @@ public:
 
     TRef<IObject> Read(IBinaryReaderSite* psite, ObjectStack& stack)
     {
-        #ifdef DREAMCAST
-            BinarySurfaceInfo bsi;
-            BinarySurfaceInfo* pbsi = &bsi; psite->CopyStructure(pbsi);
-        #else
-            BinarySurfaceInfo* pbsi; psite->GetStructure(pbsi);
-        #endif
+		BinarySurfaceInfo* pbsi; psite->GetStructure(pbsi);
 
-        PixelFormat* ppf =
-            m_pengine->GetPixelFormat(
-                pbsi->m_bitCount,
-                pbsi->m_redMask,
-                pbsi->m_greenMask,
-                pbsi->m_blueMask,
-                pbsi->m_alphaMask
-            );
+        PixelFormat* ppf = m_pengine->GetPixelFormat(	pbsi->m_bitCount,
+														pbsi->m_redMask,
+														pbsi->m_greenMask,
+														pbsi->m_blueMask,
+														pbsi->m_alphaMask );
 
         BYTE* pdata = psite->GetPointer();
         psite->MovePointer(pbsi->m_pitch * pbsi->m_size.Y());
 
-        TRef<Surface> psurface =
-            m_pengine->CreateSurface(
-                pbsi->m_size,
-                ppf,
-                NULL,
-                pbsi->m_pitch,
-                pdata,
-                psite->GetMemoryObject()
-            );
+		bool bColorKey = m_pmodeler->GetColorKeyHint() || pbsi->m_bColorKey;
 
-        if (pbsi->m_bColorKey) {
-            psurface->SetColorKey(Color(0, 0, 0));
-        }
+        TRef<Surface> psurface = m_pengine->CreateSurface(	pbsi->m_size,
+															ppf,
+															pbsi->m_pitch,
+															pdata,
+															psite->GetMemoryObject(),
+															bColorKey,
+															Color( 0, 0, 0 ),
+															psite->GetCurrentFile(),
+															m_pmodeler->GetSystemMemoryHint());
 
-        return (Value*)new ConstantImage(psurface, ZString());
+		return (Value*)new ConstantImage(psurface, ZString());
     }
 };
 
@@ -894,35 +926,6 @@ public:
         bool             b      = GetBoolean((IObject*)stack.Pop());
 
         TRef<Surface> psurface = m_pmodeler->LoadSurface(str, b);
-
-        return (Value*)CreateConstantImage3D(psurface, pcolor); 
-    }
-};
-
-//////////////////////////////////////////////////////////////////////////////
-// KGJV - Image3D - addition
-// Syntax: 'Image3D(<Image>,<Color>)'
-//
-//////////////////////////////////////////////////////////////////////////////
-
-class Image3DFactory : public IFunction {
-private:
-    TRef<Modeler>     m_pmodeler;
-    TRef<PrivateEngine> m_pengine;
-
-public:
-    Image3DFactory(Modeler* pmodeler) :
-        m_pmodeler(pmodeler)
-    {
-        CastTo(m_pengine, m_pmodeler->GetEngine());
-    }
-
-    TRef<IObject> Apply(ObjectStack& stack)
-    {
-        TRef<Image>  pimage   =  Image::Cast((Value*)(IObject*)stack.Pop());
-        TRef<ColorValue> pcolor = ColorValue::Cast(        (IObject*)stack.Pop());
-
-        TRef<Surface> psurface = pimage->GetSurface();
 
         return (Value*)CreateConstantImage3D(psurface, pcolor); 
     }
@@ -1118,13 +1121,8 @@ class TIFunctionBinary : public IFunction {
 public:
     TRefIObject Read(IBinaryReaderSite* psite, ObjectStack& stack)
     {
-        #ifdef DREAMCAST
-            StaticType value;
-            StaticType* pvalue = &value; psite->CopyStructure(pvalue);
-        #else
-            StaticType* pvalue = (StaticType*)psite->GetPointer();
-            psite->MovePointer(sizeof(StaticType));
-        #endif
+        StaticType* pvalue = (StaticType*)psite->GetPointer();
+        psite->MovePointer(sizeof(StaticType));
 
         return new ValueType(*pvalue);
     }
@@ -1676,137 +1674,27 @@ public:
     }
 
 
-#ifdef DREAMCAST
-    #if 0
-    class MeshDataCopy : public IObject
-    {
-    public:
-        MeshDataCopy(Vertex* pvertex, DWORD countVertices, WORD* pindex, DWORD countIndices)
-        {
-            Vertex* pvertexCopy = (Vertex*)malloc(countVertices * sizeof(Vertex));
-            memcpy(pvertexCopy, pvertex, countVertices * sizeof(Vertex));
-            m_pvertex = new D3DVertex[countVertices];
+TRef<IObject> Read(IBinaryReaderSite* psite, ObjectStack& stack)
+{
+    DWORD countVertices = psite->GetDWORD();
+    DWORD countIndices  = psite->GetDWORD();
+    Vertex* pvertex     = (Vertex*)psite->GetPointer();
 
-            for (int i = 0; i < countVertices; i++)
-                {
-                m_pvertex[i].SetPosition(pvertexCopy[i].GetPosition());
-                m_pvertex[i].SetTextureCoordinate(pvertexCopy[i].GetTextureCoordinate());
-                m_pvertex[i].SetNormal(pvertexCopy[i].GetNormal());
-                }
-            free(pvertexCopy);
-            
-            m_pindex =  (WORD*)malloc(countIndices * sizeof(WORD));
-            memcpy(m_pindex, pindex, countIndices * sizeof(WORD));
-        }
+    psite->MovePointer(countVertices * sizeof(Vertex));
 
-        ~MeshDataCopy()
-        {
-            delete m_pvertex;
-            free(m_pindex);
-        }
-        
-        D3DVertex* m_pvertex;
-        WORD* m_pindex;
-    };
+    WORD* pindex        = (WORD*)psite->GetPointer();
 
-    TRef<IObject> Read(IBinaryReaderSite* psite, ObjectStack& stack)
-    {
-        DWORD countVertices = psite->GetDWORD();
-        DWORD countIndices  = psite->GetDWORD();
-        Vertex* pvertex     = (Vertex*)psite->GetPointer();
+    psite->MovePointer(countIndices * sizeof(WORD));
 
-        psite->MovePointer(countVertices * sizeof(Vertex));
-
-        WORD* pindex        = (WORD*)psite->GetPointer();
-
-        psite->MovePointer(countIndices * sizeof(WORD));
-        
-        TRef<MeshDataCopy> pdata = new MeshDataCopy(pvertex, countVertices, pindex, countIndices);
-
-        return
-            Geo::CreateMesh(
-                pdata->m_pvertex,
-                countVertices,
-                pdata->m_pindex,
-                countIndices,
-                pdata
-            );
-    }
-    #endif
-    #if 1
-
-        class MeshDataCopy : public IObject
-        {
-        public:
-            MeshDataCopy(Vertex* pvertex, DWORD countVertices, WORD* pindex, 
-                            DWORD countIndices)
-            {
-                m_pvertex = (Vertex*)malloc(countVertices * sizeof(Vertex));
-                memcpy(m_pvertex, pvertex, countVertices * sizeof(Vertex));
-                m_pindex =  (WORD*)malloc(countIndices * sizeof(WORD));
-                memcpy(m_pindex, pindex, countIndices * sizeof(WORD));
-            }
-
-            ~MeshDataCopy()
-            {
-                free(m_pvertex);
-                free(m_pindex);
-            }
-            
-            Vertex* m_pvertex;
-            WORD* m_pindex;
-        };
-
-        TRef<IObject> Read(IBinaryReaderSite* psite, ObjectStack& stack)
-        {
-            DWORD countVertices = psite->GetDWORD();
-            DWORD countIndices  = psite->GetDWORD();
-            Vertex* pvertex     = (Vertex*)psite->GetPointer();
-
-            psite->MovePointer(countVertices * sizeof(Vertex));
-
-            WORD* pindex        = (WORD*)psite->GetPointer();
-
-            psite->MovePointer(countIndices * sizeof(WORD));
-            
-            TRef<MeshDataCopy> pdata = new MeshDataCopy(pvertex, countVertices, 
-                        pindex, countIndices);
-
-            return
-                Geo::CreateMesh(
-                    pdata->m_pvertex,
-                    countVertices,
-                    pdata->m_pindex,
-                    countIndices,
-                    pdata
-                );
-        }
-
-    #endif
-
-#else
-    TRef<IObject> Read(IBinaryReaderSite* psite, ObjectStack& stack)
-    {
-        DWORD countVertices = psite->GetDWORD();
-        DWORD countIndices  = psite->GetDWORD();
-        Vertex* pvertex     = (Vertex*)psite->GetPointer();
-
-        psite->MovePointer(countVertices * sizeof(Vertex));
-
-        WORD* pindex        = (WORD*)psite->GetPointer();
-
-        psite->MovePointer(countIndices * sizeof(WORD));
-
-        return
-            Geo::CreateMesh(
-                pvertex,
-                countVertices,
-                pindex,
-                countIndices,
-                psite->GetMemoryObject()
-            );
-    }
-#endif
+    return
+        Geo::CreateMesh(
+            pvertex,
+            countVertices,
+            pindex,
+            countIndices,
+            psite->GetMemoryObject()
+        );
+}
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -2194,7 +2082,7 @@ public:
     void Evaluate()
     {
         char cbTemp[80];
-        sprintf(cbTemp, "%.2g", (double)GetNumber()->GetValue());
+        sprintf_s(cbTemp, 80, "%.2g", (double)GetNumber()->GetValue());
 
         GetValueInternal() = cbTemp;
     }
@@ -2253,18 +2141,14 @@ public:
 //
 //////////////////////////////////////////////////////////////////////////////
 
-class ModelerImpl : public Modeler 
-{
+class ModelerImpl : public Modeler {
 private:
-    TRef<Engine>      m_pengine;
-    TRef<ModelerSite> m_psite;
-    PathString        m_pathStr;
+    TRef<Engine>			m_pengine;
+    TRef<ModelerSite>		m_psite;
+    PathString				m_pathStr;
+	ImportImageFactory *	m_pImageFactory;			// This allows us to pass extra parameters into the image factory.
 
     TMap<ZString, TRef<INameSpace> > m_mapNameSpace;
-
-	//#294 
-	TVector<ZString>		m_vStyleHudName;
-	int						m_nStyle;
 
 	// Hints. Modeler flags referenced during resource loading.
 	bool					m_bHintColorKey;			// Surface requires colour keying.
@@ -2278,6 +2162,9 @@ public:
 		{
         m_psite = new ModelerSiteImpl();
         InitializeNameSpace();
+		m_bHintColorKey = false;
+		m_bHintSystemMemory = false;
+		m_bHintUIImage = true;				// Default to true at startup.
 		}
 
     void SetSite(ModelerSite* psite)
@@ -2289,70 +2176,6 @@ public:
     {
         m_pathStr = pathStr;
     }
-
-	// turkey 8/13 #294
-	// This is the list of hud names that the 'Style' menu option cycles through
-	// 'Default' is the first one on the list, for which the modeler will look for files in artwork only
-	// the rest are taken from folder names in artwork/mods
-	void BuildHudList()
-	{
-		HANDLE hFind;
-		WIN32_FIND_DATAA findFileData;
-
-		m_vStyleHudName.PushEnd("Default");
-
-		ZString hudpath = GetArtPath() + "/Mods/*";
-
-		hFind = FindFirstFileA(hudpath, &findFileData);
-
-		if (hFind == INVALID_HANDLE_VALUE)
-		{
-			//still have the default in the main directory
-			debugf("Invalid handle value (%d)\n", GetLastError());
-			return;
-		}
-		do
-		{
-			if ((findFileData.dwFileAttributes | FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY
-				&& (findFileData.cFileName[0] != '.'))
-			{
-				ZString name = findFileData.cFileName;
-				m_vStyleHudName.PushEnd(name);
-			}
-
-		} while (FindNextFileA(hFind, &findFileData));
-
-	}
-
-	int CycleStyleHud()
-	{
-		int style = (m_nStyle + 1) % m_vStyleHudName.GetCount();
-        SetStyleHud(style);
-		return style;
-	}
-
-	int GetStyleHud()
-	{
-		return m_nStyle;
-	}
-
-	void SetStyleHud(int style)
-	{
-		m_nStyle = 0;
-		if (style < m_vStyleHudName.GetCount() && style > 0)
-			m_nStyle = style;
-	}
-
-	void SetStyleHud(ZString styleName)
-	{
-		SetStyleHud(m_vStyleHudName.Find(styleName));
-	}
-
-	ZString GetStyleHudName()
-	{
-		return m_vStyleHudName[m_nStyle];
-	}
-	// end #294
 
     ZString GetArtPath()
     {
@@ -2389,7 +2212,7 @@ public:
         // built in values
         //
 
-        TRef<Number> ptime = new ModifiableNumber(0);
+        TRef<Number> ptime = new ModifiableNumber(0); //Fix memory leak -Imago 8/2/09
 
         pns->AddMember("emptyGeo",           Geo::GetEmpty()                 );
         pns->AddMember("emptyImage",         (Value*)Image::GetEmpty()       );
@@ -2426,7 +2249,6 @@ public:
         //
 
         pns->AddMember("SwitchString",       new TSwitchFactory<ZString>());
-		pns->AddMember("SwitchPoint",		 new TSwitchFactory<Point>());  // #361
 
         //
         // Data type constructors
@@ -2466,10 +2288,11 @@ public:
         // Images
         //
 
-        pns->AddMember("ImportImage",        new ImportImageFactory(this));
+		m_pImageFactory = new ImportImageFactory( this );
+
+        pns->AddMember("ImportImage",        m_pImageFactory );
         pns->AddMember("ImportImageFromFile",new ImportImageFromFileFactory(this)); // KGJV 32B
         pns->AddMember("ImportImage3D",      new ImportImage3DFactory(this));
-        pns->AddMember("Image3D",            new Image3DFactory(this)); // KGJV - added
         pns->AddMember("ImportImageLR",      new ImportImageLRFactory(this));
 
         pns->AddMember("FrameImage",         CreateFrameImageFactory());
@@ -2539,6 +2362,9 @@ public:
         pns->AddMember("BlendModeSource",      new Number(BlendModeSource     ));
         pns->AddMember("BlendModeAdd",         new Number(BlendModeAdd        ));
         pns->AddMember("BlendModeSourceAlpha", new Number(BlendModeSourceAlpha));
+		//Imago exposed 7/10
+		pns->AddMember("BlendModeSourceAlphaTest", new Number(BlendModeSourceAlphaTest));
+		pns->AddMember("BlendModeAlphaStampThrough", new Number(BlendModeAlphaStampThrough));
 
         //
         // Transforms
@@ -2579,15 +2405,10 @@ public:
 
     TRef<ZFile> GetFile(const PathString& pathStr, const ZString& strExtensionArg, bool bError)
     {
-		if (m_vStyleHudName.GetCount() == 0)
-			BuildHudList();
-
-		
-
         ZString strExtension = pathStr.GetExtension();
-		ZString strToTryOpenFromMods; // turkey 8/13 #294 will use subfolders in /mods/ based on styleHud setting
         ZString strToTryOpen;// yp Your_Persona October 7 2006 : TextureFolder Patch
         ZString strToTryOpenFromDev;// KGJV - 'dev' subfolder
+		ZString strPackFile; // doofus - Filename for pack searching.
 
         ZString strToOpen;
 		TRef<ZFile> pfile = NULL;
@@ -2597,26 +2418,27 @@ public:
             if (strExtension.ToLower() != strExtensionArg.ToLower()) { // KGJV 32B - ignore case
                 return NULL;
             }
+			strPackFile = pathStr;
             strToOpen = m_pathStr + pathStr;
             strToTryOpenFromDev = m_pathStr + "dev/" + pathStr;
 			strToTryOpen = m_pathStr + "Textures/" + pathStr;
-			strToTryOpenFromMods = ZString(m_pathStr + "Mods/") + m_vStyleHudName[m_nStyle] + "/" + ZString(pathStr);
-
         } else {
+			strPackFile = ZString(pathStr) + ( "." + strExtensionArg );
             strToOpen = ZString(m_pathStr + pathStr) + ("." + strExtensionArg);
             strToTryOpenFromDev = ZString(m_pathStr + "dev/" + pathStr) + ("." + strExtensionArg);
 			strToTryOpen = ZString(m_pathStr + "Textures/" + pathStr) + ("." + strExtensionArg);
-			strToTryOpenFromMods = ZString(m_pathStr + "Mods/") + m_vStyleHudName[m_nStyle] + "/" + ZString(pathStr) + ("." + strExtensionArg);
-		}
-		// turkey #294
-		if (pfile == NULL && m_nStyle && 
-			(strToTryOpenFromMods.Right(17) != "newgamescreen.mdl")) //newgamescreen needs to be ACSS-protected, so don't open it from mods
-		{
-			pfile = new ZFile(strToTryOpenFromMods, OF_READ | OF_SHARE_DENY_WRITE);
-			if (!pfile->IsValid()) pfile = NULL;
         }
+		DWORD dwFileSize;
+		void * pPackFile;
+		pPackFile = CDX9PackFile::LoadFile( &strPackFile[0], &dwFileSize );
+		if( ( pPackFile != NULL ) && ( dwFileSize > 0 ) )
+		{
+			pfile = new ZPackFile( strPackFile, pPackFile, dwFileSize );
+		}
+
 		// yp Your_Persona October 7 2006 : TextureFolder Patch
-		if(strToTryOpen.Right(7) == "bmp.mdl") // if its a texture, try loading from the strToTryOpen
+		if( ( pfile == NULL ) && 
+			( strToTryOpen.Right(7) == "bmp.mdl" ) ) // if its a texture, try loading from the strToTryOpen
 		{
 			pfile = new ZFile(strToTryOpen, OF_READ | OF_SHARE_DENY_WRITE);
 			// mmf modified Y_P's logic
@@ -2628,25 +2450,34 @@ public:
 		if(!pfile) // if we dont have a file here, then load regularly.
 		{
 			// mmf #if this out for release.  I left the strtoTryOpenFromDev code in above
-#if 0
+
+// pkk - Use same conditional compilation like on registry keys
+#ifdef _ALLEGIANCE_PROD_
+			pfile = new ZFile(strToOpen, OF_READ | OF_SHARE_DENY_WRITE);
+#else
             // KGJV try dev folder 1st
             pfile = new ZFile(strToTryOpenFromDev, OF_READ | OF_SHARE_DENY_WRITE);
-            if (!pfile->IsValid())
+			if (!pfile->IsValid()) {
 			    pfile = new ZFile(strToOpen, OF_READ | OF_SHARE_DENY_WRITE);
-            else
-                if (g_bMDLLog)
-                    ZDebugOutput("'dev' file found for " + pathStr + "'\n");
-#else
-			pfile = new ZFile(strToOpen, OF_READ | OF_SHARE_DENY_WRITE);
-#endif                
+			} else {
+				if (g_bMDLLog) {
+                    ZDebugOutput("'dev' file found for " + pathStr + "\n");
+				}
+			}
+#endif     
 
 			// mmf added debugf but will still have it call assert
 			if (!pfile->IsValid()) {
-				ZDebugOutput("Could not open the artwork file "+ strToOpen + "'\n");
+				ZDebugOutput("Could not open the artwork file "+ strToOpen + "\n");
 				// this may fail/crash if strToOpen is fubar, but we are about to ZRAssert anyway
 			}
 		}
 
+		//Imago 11/09/09 - Provide a helpful message box for this common error
+		if (bError && !pfile->IsValid() && m_psite) {
+			PostMessage(GetActiveWindow(), WM_SYSCOMMAND, SC_MINIMIZE,0);
+			MessageBox(GetDesktopWindow(), "Could not open the artwork file "+strToOpen, "Allegiance: Fatal modeler error", MB_ICONERROR);
+		}
 		ZRetailAssert(!(bError && !pfile->IsValid() && m_psite));
 
         return pfile->IsValid() ? pfile : NULL;
@@ -2657,9 +2488,18 @@ public:
         return GetFile(pathStr, strExtensionArg, bError);
     }
 
-    TRef<Surface> LoadSurface(const ZString& str, bool bColorKey, bool bError)
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// LoadSurface()
+	// Added bSystemMem flag. If this is specified, we keep the image in system memory rather 
+	// than creating a D3D resource for it. Reasons for doing this: we don't want to waste texture
+	// memory creating a surface that is going to be subdivided up into smaller textures, such
+	// as when the source image is loaded for an AnimatedImage object.
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	TRef<Surface> LoadSurface(const ZString& str, bool bColorKey, bool bError, bool bSystemMem )
     {
-        TRef<ConstantImage> pimage; CastTo(pimage, LoadImage(str, bColorKey, bError));
+        TRef<ConstantImage> pimage; 
+		CastTo(pimage, LoadImage(str, bColorKey, bError, bSystemMem));
 
         if (pimage) {
             return pimage->GetSurface();
@@ -2668,7 +2508,12 @@ public:
         return NULL;
     }
 
-    TRef<Image> LoadImage(const ZString& str, bool bColorKey, bool bError)
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// LoadImage()
+	//
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	TRef<Image> LoadImage(const ZString& str, bool bColorKey, bool bError, bool bSystemMem)
     {
         ZAssert(str.ToLower() == str);
         ZAssert(str.Right(3) == "bmp");
@@ -2699,7 +2544,10 @@ public:
         // Try to load it
         //
 
-        pns = GetNameSpace(str, bError);
+		if( bColorKey == true )
+			SetColorKeyHint( bColorKey );
+
+        pns = GetNameSpace(str, bError, bSystemMem);
 
         if (pns) {
             TRef<ConstantImage> pimage; CastTo(pimage, (Value*)pns->FindMember(str));
@@ -2745,7 +2593,7 @@ public:
     TRef<Geo> LoadGeo(const ZString& str, bool bError)
     {
         ZAssert(str.ToLower() == str);
-        TRef<INameSpace> pns = GetNameSpace(str, bError);
+        TRef<INameSpace> pns = GetNameSpace(str, bError, false);
 
         if (pns) {
             TRef<Geo> pgeo; CastTo(pgeo, (Value*)pns->FindMember("object"));
@@ -2799,7 +2647,7 @@ public:
         return NULL;
     }
 
-    INameSpace* GetNameSpace(const ZString& str, bool bError)
+    INameSpace* GetNameSpace(const ZString& str, bool bError, bool bSystemMem)
     {
         TRef<INameSpace> pns = GetCachedNameSpace(str);
 
@@ -2809,7 +2657,10 @@ public:
 
         TRef<ZFile> pfile = GetFile(str, "mdl", bError);
 
-        if (pfile != NULL) {
+
+        if (pfile != NULL) 
+		{
+			bool bOriginalValue = SetSystemMemoryHint( bSystemMem );
             if (*(DWORD*)pfile->GetPointer(false, false) == MDLMagic) {
                 if (g_bMDLLog) {
                     ZDebugOutput("Reading Binary MDL file '" + str + "'\n");
@@ -2822,6 +2673,7 @@ public:
                 pns = ::CreateNameSpace(str, this, pfile);
             }
 
+			SetSystemMemoryHint( bOriginalValue );
             m_mapNameSpace.Set(str, pns);
             return pns;
         }
@@ -2838,6 +2690,42 @@ public:
     {
         m_mapNameSpace.Remove(TRef<INameSpace>(pns));
     }
+
+	bool SetColorKeyHint( const bool bColorKey )
+	{
+		bool bOldValue = m_bHintColorKey;
+		m_bHintColorKey = bColorKey;
+		return bOldValue;
+	}
+
+	bool GetColorKeyHint( )
+	{
+		return m_bHintColorKey;
+	}
+
+	bool SetSystemMemoryHint( const bool bSysMem )
+	{
+		bool bOldValue = m_bHintSystemMemory;
+		m_bHintSystemMemory = bSysMem;
+		return bOldValue;
+	}
+	
+	bool GetSystemMemoryHint( )
+	{
+		return m_bHintSystemMemory;
+	}
+
+	bool SetUIImageUsageHint( const bool bUIImageUsage )
+	{
+		bool bOldValue = m_bHintUIImage;
+		m_bHintUIImage = bUIImageUsage;
+		return bOldValue;
+	}
+
+	bool GetUIImageUsageHint( )
+	{
+		return m_bHintUIImage;
+	}
 };
 
 //////////////////////////////////////////////////////////////////////////////

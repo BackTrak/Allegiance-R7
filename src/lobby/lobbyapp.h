@@ -16,8 +16,6 @@
 // KGJV moved into regkey.h
 //#define HKLM_AllLobby "SYSTEM\\CurrentControlSet\\Services\\AllLobby"
 
-#include "steam_gameserver.h"
-
 /////////////////////////////////////////////////////////////////////////////
 // Forward Declarations
 
@@ -150,14 +148,9 @@ public:
 	  return m_fFreeLobby;
   }
 
-  // BT - STEAM
-  STEAM_GAMESERVER_CALLBACK(CLobbyApp, OnValidateAuthTicketResponse, ValidateAuthTicketResponse_t);
- 
   // BT - 12/21/2010 - ACSS integration
   bool CLobbyApp::GetRankForCallsign(const char* szPlayerName, int *rank, double *sigma, double *mu, int *commandRank, double *commandSigma, double *commandMu, char *rankName, int rankNameLen);
- 
-  // BT - STEAM
-  bool CDKeyIsValid(const char* szPlayerName, const char* szCDKey, const char* szAddress, char *resultMessage, int resultMessageLength, char *playerIdentifier);
+  bool CDKeyIsValid(const char* szPlayerName, const char* szCDKey, const char* szAddress, char *resultMessage, int resultMessageLength);
 
   void SetPlayerMission(const char* szPlayerName, const char* szCDKey, CFLMission* pMission, const char* szAddress);
   void RemovePlayerFromMission(const char* szPlayerName, CFLMission* pMission);
@@ -187,17 +180,8 @@ public:
 	  m_cStaticCoreInfo = 0;
   }
 
-  //  BT - STEAM
-  void AddAuthorizingPlayerByPlayerIdentifier(const ZString &strPlayerIdentifier, void * data);
-  void RemoveAuthorizingPlayerByPlayerIdentifier(const ZString &strPlayerIdentifier);
-  bool BootPlayerFromLobbyByPlayerIdentifier(const ZString &strPlayerIdentifier, const ZString &bootReason);
-  bool AuthorizePlayerToConnectToLobby(const ZString &strPlayerIdentifier);
-  ZString GetPlayerIdentifierFromCDKeyString(char * cdKey);
-  bool IsPlayerWaitingForAuthorization(const  ZString &playerIdentifier);
 
 private:
-  
-
   const char *    SzFmMsgHeader(FedMessaging * pthis) {return IsFMServers(pthis) ? "Servers: " : "Clients: ";}
   void            SetNow()
   {
@@ -217,8 +201,6 @@ private:
   // *** player list stuff *** 
   void BootPlayersByName(const ZString& strName);
 
-
-
   class PlayerLocInfo
   {
     ZString m_strName;
@@ -231,20 +213,15 @@ private:
     CFLMission*     GetMission() { return m_pMission; };
   };
 
+  struct StringCmpLess // sort by length, then content (faster)
+  {
+    bool operator () (const ZString& str1, const ZString& str2) const;
+  };
 
-  public:
-	  struct StringCmpLess // sort by length, then content (faster)
-	  {
-		bool operator () (const ZString& str1, const ZString& str2) const;
-	  };
-
-	  struct StringICmpLess // sort by length, then case insensitive content (faster)
-	  {
-		bool operator () (const ZString& str1, const ZString& str2) const;
-	  };
-
-
-  private:
+  struct StringICmpLess // sort by length, then case insensitive content (faster)
+  {
+    bool operator () (const ZString& str1, const ZString& str2) const;
+  };
 
 // data
   ILobbyAppSite *   m_plas;
@@ -282,10 +259,6 @@ private:
   typedef std::multimap<ZString, PlayerByCDKey::iterator, StringICmpLess> PlayerByName;
   PlayerByCDKey     m_playerByCDKey;
   PlayerByName      m_playerByName;
-
-  // BT - STEAM
-  typedef std::multimap<ZString, void *, CLobbyApp::StringCmpLess> PlayersBySteamIdentifier;
-  PlayersBySteamIdentifier m_playersByPlayerIdentifier;
 
   // KGJV #114 - core stuff
   StaticCoreInfo   *m_vStaticCoreInfo;

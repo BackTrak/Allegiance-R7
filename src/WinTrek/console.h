@@ -86,7 +86,6 @@ public:
     virtual bool DrawSelectionBox(void) const = 0;
 
     virtual bool IsComposing() = 0;
-	virtual bool OnKey(const KeyState& ks) = 0;	//Turkey 5/11 #59
     virtual bool OnChar(const KeyState& ks) = 0;
 
     virtual TRef<GameStateContainer> GetGameStateContainer() = 0;

@@ -100,7 +100,7 @@ public:
             ZError("divide by zero");
             return *this;
         } else {
-            return *this / (float) sqrt(lengthSquared);
+            return *this / sqrt(lengthSquared);
         }
     }
 

@@ -1735,9 +1735,9 @@ class ThingSiteImpl : public ThingSitePrivate
         HRESULT LoadDecal(const char* textureName, bool bDirectional, float width)
         {
             ZAssert(m_pthing == NULL && m_pdecal == NULL);
-#ifdef BUILD_DX9
+// BUILD_DX9
 			GetEngine()->SetEnableMipMapGeneration( true );
-#endif // BUILD_DX9
+// BUILD_DX9
 
             Number* ptime = GetWindow()->GetTime();
             TRef<AnimatedImage> pimage = 
@@ -1764,15 +1764,15 @@ class ThingSiteImpl : public ThingSitePrivate
                 if (bDirectional) {
                     m_pdecal->SetForward(Vector(0, 0, -1));
                 }
-#ifdef BUILD_DX9
+// BUILD_DX9
 				GetEngine()->SetEnableMipMapGeneration( false );
-#endif // BUILD_DX9
+// BUILD_DX9
 
                 return S_OK;
             }
-#ifdef BUILD_DX9
+// BUILD_DX9
 			GetEngine()->SetEnableMipMapGeneration( false );
-#endif // BUILD_DX9
+// BUILD_DX9
             return E_FAIL;
         }
 
@@ -1786,10 +1786,10 @@ class ThingSiteImpl : public ThingSitePrivate
 
             if (modelName)
             {
-#ifdef BUILD_DX9
+// BUILD_DX9
 				bool bOldColorKeyValue = GetModeler()->SetColorKeyHint( false );
 				GetEngine()->SetEnableMipMapGeneration( true );
-#endif // BUILD_DX9
+// BUILD_DX9
                 m_pthing =
                     ThingGeo::Create(
                         GetWindow()->GetModeler(),
@@ -1813,10 +1813,10 @@ class ThingSiteImpl : public ThingSitePrivate
                 if (pns != NULL) {
                     rc = m_pthing->LoadMDL(options, pns, pimageTexture);
                 } else {
-#ifdef BUILD_DX9
+// BUILD_DX9
 					GetModeler()->SetColorKeyHint( bOldColorKeyValue );
 					GetEngine()->SetEnableMipMapGeneration( false );
-#endif // BUILD_DX9
+// BUILD_DX9
                     return E_FAIL;
                 }
 
@@ -1842,10 +1842,10 @@ class ThingSiteImpl : public ThingSitePrivate
                     }
                 #endif
 
-#ifdef BUILD_DX9
+// BUILD_DX9
 				GetModeler()->SetColorKeyHint( bOldColorKeyValue );
 				GetEngine()->SetEnableMipMapGeneration( false );
-#endif // BUILD_DX9
+// BUILD_DX9
 			}
             return rc;
         }
@@ -2428,12 +2428,12 @@ void WinTrekClient::Initialize(Time timeNow)
 
 TRef<AnimatedImage> WinTrekClient::LoadExplosionImage(const ZString& str)
 {
-#ifdef BUILD_DX9
+// BUILD_DX9
 	// Load source AnimatedImage into system memory rather than VRAM.
     return new AnimatedImage(new Number(0.0f), GetModeler()->LoadSurface(str, true, true, true));
-#else
-    return new AnimatedImage(new Number(0.0f), GetModeler()->LoadSurface(str, true));
-#endif // BUILD_DX9
+//#else
+//    return new AnimatedImage(new Number(0.0f), GetModeler()->LoadSurface(str, true));
+// BUILD_DX9
 }
 
 void WinTrekClient::Terminate(void)
@@ -4521,7 +4521,7 @@ void      WinTrekClient::ReceiveChat(IshipIGC*   pshipSender,
     //        }
     //    }
 
-        if ((pmodelTarget || cid == c_cidStop) && trekClient.GetShip()->LegalCommand(cid, pmodelTarget))//#321 included c_cidStop
+        if (pmodelTarget && trekClient.GetShip()->LegalCommand(cid, pmodelTarget))
         {
 
             Command cmd = (ctRecipient == CHAT_INDIVIDUAL) && (pshipSender == trekClient.GetShip())
@@ -4535,7 +4535,7 @@ void      WinTrekClient::ReceiveChat(IshipIGC*   pshipSender,
 
                 if (trekClient.GetShip()->GetCluster() &&
                     (trekClient.GetShip()->GetParentShip() == NULL) &&
-                    (cid == c_cidStop || trekClient.GetCluster(trekClient.GetShip(), pmodelTarget)))//#321 included c_cidStop
+                    trekClient.GetCluster(trekClient.GetShip(), pmodelTarget))
                 {
                     trekClient.SetAutoPilot(true);
                     trekClient.bInitTrekJoyStick = true;
@@ -4550,20 +4550,18 @@ void      WinTrekClient::ReceiveChat(IshipIGC*   pshipSender,
 					//Xynth #14 7/2010
 					PlayerInfo* ppi = (PlayerInfo*)(pshipSender->GetPrivateData());					
 
-					ZString str = GetKeyName(TK_AcceptCommand);
-
                     if ((cid == c_cidPickup) && (pmodelTarget == pshipSender) &&
                         pshipSender->  GetBaseHullType()->HasCapability(c_habmRescue))
                     {
-                        trekClient.PostText(true, "New orders from %s: prepare for recovery. Press ["+str+"] to accept.", 
+                        trekClient.PostText(true, "New orders from %s: prepare for recovery. Press [insert] to accept.", 
                                             (const char*)strSender);
                     }
                     else
 						if (ppi->IsTeamLeader())  //Xynth #14 7/2010 change color if from comm
-							trekClient.PostText(true, "\x81 " + ConvertColorToString(Color::Orange()) + "New orders from %s to %s: %s. Press ["+str+"] to accept." + END_COLOR_STRING, 
+							trekClient.PostText(true, "\x81 " + ConvertColorToString(Color::Orange()) + "New orders from %s to %s: %s. Press [insert] to accept." + END_COLOR_STRING, 
                                             (const char*)strSender, (const char*)strRecipient, (const char*)strOrder);
 						else
-							trekClient.PostText(true, "New orders from %s to %s: %s. Press ["+str+"] to accept.", 
+							trekClient.PostText(true, "New orders from %s to %s: %s. Press [insert] to accept.", 
                                             (const char*)strSender, (const char*)strRecipient, (const char*)strOrder);
                 }
             }
@@ -4574,10 +4572,10 @@ void      WinTrekClient::ReceiveChat(IshipIGC*   pshipSender,
 void            WinTrekClient::Preload(const char*  pszModelName,
                                        const char*  pszTextureName)
 {
-#ifdef BUILD_DX9
+// BUILD_DX9
 	bool bOldColorKeyValue = GetModeler()->SetColorKeyHint( false );
 	GetEngine()->SetEnableMipMapGeneration( true );
-#endif // BUILD_DX9
+// BUILD_DX9
 
     if (pszModelName)
         GetModeler()->GetNameSpace(pszModelName);
@@ -4591,23 +4589,10 @@ void            WinTrekClient::Preload(const char*  pszModelName,
         GetModeler()->GetNameSpace(bfr);
     }
 
-#ifdef BUILD_DX9
+// BUILD_DX9
 	GetModeler()->SetColorKeyHint( bOldColorKeyValue );
 	GetEngine()->SetEnableMipMapGeneration( false );
-#endif // BUILD_DX9
-}
-
-
-// BT - STEAM
-void WinTrekClient::SetSteamAuthTicketID(HAuthTicket hAuthTicket)
-{
-	m_hAuthTicket = hAuthTicket;
-}
-
-// BT - STEAM
-HAuthTicket	WinTrekClient::GetSteamAuthTicketID()
-{
-	return m_hAuthTicket;
+// BUILD_DX9
 }
 
 void WinTrekClient::SetCDKey(const ZString& strCDKey)

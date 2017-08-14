@@ -8,7 +8,7 @@
 
 float HueComponent(float hue)
 {
-    hue = (float)fabs(mod(hue + 3, 6) - 3);
+    hue = fabs(mod(hue + 3, 6) - 3);
 
     if (hue > 2) {
         return 0;

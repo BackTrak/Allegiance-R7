@@ -1161,7 +1161,7 @@ public:
     bool OnButtonCredits()
     {
 		// BUILD_DX9
-		//GetModeler()->SetColorKeyHint( true );
+		GetModeler()->SetColorKeyHint( true );
 		// BUILD_DX9
 
         TRef<INameSpace> pnsCredits = GetModeler()->GetNameSpace("creditspane");

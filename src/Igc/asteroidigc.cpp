@@ -43,17 +43,11 @@ HRESULT     CasteroidIGC::Initialize(ImissionIGC* pMission, Time now, const void
                 Orientation o(dataAsteroid->forward, dataAsteroid->up);
                 SetOrientation(o);
             }
-			
-			// Turkey 01/2014 AME is bugged, rotation axis should be a normalized vector
-			Rotation r = dataAsteroid->rotation;
-			Vector axis = r.axis().Normalize();
-			r.axis(axis);
-            SetRotation(r);
+            SetRotation(dataAsteroid->rotation);
 
             SetSignature(dataAsteroid->signature);
 
             m_fraction = dataAsteroid->fraction;
-			if (m_fraction > 1.0f) m_fraction = 1.0f; // Turkey 01/2014 AME is bugged, gives rocks 100.4% hitpoints (241/240)
 
             if (dataAsteroid->name[0] != '\0')
                 SetName(dataAsteroid->name);
@@ -238,7 +232,7 @@ int IasteroidIGC::GetSpecialAsterioid(const MissionParams*  pmp, int index)
 int IasteroidIGC::GetRandomType(AsteroidAbilityBitMask aabm)
 {
     int index;
-	srand(GetTickCount() + (int)time(NULL)); //imago 10/14, apparently this call in ZLib is out of scope.
+
     switch (aabm)
     {
 	// Number of regular and he3 asteroids is also hardcoded here, see #92

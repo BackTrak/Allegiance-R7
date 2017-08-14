@@ -56,16 +56,7 @@ public:
     DWORD __stdcall Release()
     {
         if (--m_count == 0) {
-
-			__try
-			{
-				delete this;
-			}
-			__except (1)
-			{
-				printf("IObjectSingle::Caught an unknown exception\n");
-				//return E_UNEXPECTED;
-			}
+            delete this;
             return 0;
         }
 

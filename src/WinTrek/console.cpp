@@ -512,7 +512,6 @@ private:
     TRef<ModifiableNumber>  m_pnumberGotFlag;
     TRef<ModifiableNumber>  m_pnumberGotArtifact;
     TRef<ModifiableNumber>  m_pnumberSignature;
-//	TRef<ModifiableString>  m_pstringDetectionRange; //Spunky #302 //turkey commented out #294
     
 
     // data for composed chat/cmd
@@ -541,8 +540,6 @@ private:
     TRef<ImodelIGC>        m_pmodelTarget;
 
     ZString                m_strTypedText;
-
-	int					   m_cursorPosition;
 
     bool                   m_bMouseIn;
 
@@ -740,10 +737,6 @@ public:
 
         m_pns->AddMember("Kills",  m_pnumberKills =  new ModifiableNumber(0));
 
-		//detection range - Spunky #302
-
-//		m_pns->AddMember("DetectionRange", m_pstringDetectionRange = new ModifiableString("")); 
-
         // Verb & recipient button bars
         m_pnsDisplays = GetModeler()->GetNameSpace(pszFileName);
 
@@ -796,31 +789,12 @@ public:
         m_pnumberMoney->SetValue((float)trekClient.GetMoney());
         m_pnumberAutopilotOn->SetValue(trekClient.autoPilot() ? 1.0f : 0.0f);
         
-		//Spunky #302
-		//Turkey made this redundant with #294. It is now done in ModelData::GetScanRange()
-		/*
-		IshipIGC* me = trekClient.GetShip();
-		ImodelIGC* target = trekClient.GetShip()->GetCommandTarget(c_cmdCurrent);
-		int targetScannerRange;
+        
+        
 
-		if (target && target->GetSide() && target->GetSide() != me->GetSide())
-		{
-			if (target->GetObjectType() == OT_ship)
-				targetScannerRange = ((IshipIGC*)target)->GetHullType()->GetScannerRange();
-			else if (target->GetObjectType() == OT_station)
-				targetScannerRange = ((IstationIGC*)target)->GetStationType()->GetScannerRange();
-			else if (target->GetObjectType() == OT_probe)
-				targetScannerRange = ((IprobeIGC*)target)->GetProbeType()->GetScannerRange();
-			
-			//don't leak information
-			targetScannerRange /= target->GetSide()->GetGlobalAttributeSet().GetAttribute(c_gaScanRange);
-			m_pstringDetectionRange->SetValue((ZString)(int)(me->GetSignature() * targetScannerRange 
-				/ me->GetSide()->GetGlobalAttributeSet().GetAttribute(c_gaSignature) 
-				+ me->GetRadius() + target->GetRadius()));			
-		}
-		else
-			m_pstringDetectionRange->SetValue("");
-		*/
+        
+        
+        
 
         if (!pshipParent)
             m_pnumberBoardState->SetValue(0);
@@ -960,12 +934,12 @@ public:
         ImagazineIGC* magazine = (ImagazineIGC*)(trekClient.GetShip()->GetMountedPart(ET_Magazine, 0));
         if (magazine)
             rMissileLock = magazine->GetLock();
-        ZString str = GetKeyName(TK_FireMissile);
+        
         if (rMissileLock > 0.0f && rMissileLock < 1.0f && 
                 !(m_rPreviousMissileLock > 0.0f && m_rPreviousMissileLock < 1.0f))
             trekClient.PostText(false, "Partial missile lock - center the target on screen to improve the lock.");
         else if (rMissileLock == 1.0f && m_rPreviousMissileLock != 1.0f)
-            trekClient.PostText(false, "%s", (const char*)(ZString("Missile lock acquired - press ["+str+"] to fire a ")
+            trekClient.PostText(false, "%s", (const char*)(ZString("Missile lock acquired - press [Ctrl]-[Space] to fire a ")
                 + magazine->GetMissileType()->GetName() + " missile at the target."));
         else if (rMissileLock == 0.0f && m_rPreviousMissileLock != 0.0f && !m_fTargetChanged)
             trekClient.PostText(false, "Missile lock lost.");
@@ -1313,8 +1287,7 @@ public:
             //Fill in the typed text
             if (m_csComposeState != c_csComposeMouseCommand)
             {
-                //Turkey 5/11 #59
-				ZString displayedChat = m_strTypedText.LeftOf(m_strTypedText.GetLength() - m_cursorPosition) + "|" + m_strTypedText.RightOf(m_cursorPosition);
+                ZString displayedChat = m_strTypedText + "|";
 
                 if (m_csComposeState == c_csComposeCommand)
                 {
@@ -1659,7 +1632,6 @@ public:
         // clean up the composing process        
         SetComposeState(c_csNotComposing);
         SetChatObject(NULL);
-		SetVerb(c_cidNone);//#319
 
         // default to the command target
         m_pchsCurrent = &m_chsCommand;
@@ -1679,7 +1651,6 @@ public:
 
         SetChatObject(NULL);
         m_strTypedText.SetEmpty();
-		m_cursorPosition = 0; //Turkey 5/11 #59
 
         // set the compose state
         SetComposeState(cs);
@@ -1762,7 +1733,7 @@ public:
     {
         if (m_csComposeState == c_csNotComposing)
         {
-            StartComposing(c_csComposeMouseCommand, &m_chsCommand);
+            StartComposing(c_csComposeChat, &m_chsChat);
 
             m_pchsCurrent->SetRecipient(CHAT_FRIENDLY_SECTOR, pcluster->GetObjectID(), pcluster);
 
@@ -1770,8 +1741,6 @@ public:
         }
         else
         {
-			bool useDefaultVerb = true;//#319
-
             if (m_csComposeState != c_csComposeCommand)
                 m_csComposeState = c_csComposeCommand;
 
@@ -1797,28 +1766,11 @@ public:
                             SendChat();
                             return;
                         }
-                    }//Turkey #319 3/13: allow build commands to target a sector
-					if (m_cidVerb == c_cidBuild)
-					{
-						useDefaultVerb = false;
                     }
-                }//#320 If you're telling it to run, find a station for it to run to
-				if (m_cidVerb == c_cidHide)
-				{
-					ImodelIGC* pmodel = FindTarget(pship,
-												c_ttFriendly | c_ttStation | c_ttNearest,
-												NULL, pcluster, NULL, NULL, c_sabmRepair);
-					if (pmodel)
-					{
-						SetChatObject(pmodel);
-						SendChat();
-						return;
                 }
             }
 
-            }
-
-            if (useDefaultVerb) SetVerb(c_cidGoto);
+            SetVerb(c_cidGoto);
 
             // create a cluster buoy in that sector
             DataBuoyIGC db;
@@ -1976,16 +1928,8 @@ public:
                 SetVerb(c_cidDefault);
             }
 
-			//#320: special case, ordering to hide in an aleph changes to hide in station in next sector
-			if (pmodelMin->GetObjectType() == OT_warp && m_cidVerb == c_cidHide)
-			{
-				PickCluster(((IwarpIGC*)pmodelMin)->GetDestination()->GetCluster(), button);
-			} 
-			else
-			{
             SetChatObject(pmodelMin);
             SendChat();
-        }
         }
         else if (m_bRecipientVisible)
         {
@@ -2375,50 +2319,6 @@ public:
                : NULL;
     }
 
-	//Turkey 5/11 #59
-	//Triggered whenever a non-character key is pressed while the chat
-	//box is open. Plays a sound and adjusts cursor position.
-	//imago 10/14 - dont play the chat key sound twice
-	bool OnKey(const KeyState& ks)
-	{
-		if (m_csComposeState > c_csComposeMouseCommand)
-        {
-			if (!m_strTypedText.IsEmpty()) {
-				switch (ks.vk) {
-				case VK_HOME:
-					m_cursorPosition = 0;
-					trekClient.PlaySoundEffect(chatKeySound);
-					UpdateComposedChat();
-					break;
-				case VK_END:
-					m_cursorPosition = m_strTypedText.GetLength();
-					trekClient.PlaySoundEffect(chatKeySound);
-					UpdateComposedChat();
-					break;
-				case VK_RIGHT:
-					if (m_cursorPosition != m_strTypedText.GetLength()) m_cursorPosition++;
-					trekClient.PlaySoundEffect(chatKeySound);
-					UpdateComposedChat();
-					break;
-				case VK_LEFT:
-					if (m_cursorPosition != 0) m_cursorPosition--;
-					trekClient.PlaySoundEffect(chatKeySound);
-					UpdateComposedChat();
-					break;
-				case VK_DELETE:
-					if (m_cursorPosition < m_strTypedText.GetLength())
-					{
-						m_cursorPosition++;
-						trekClient.PlaySoundEffect(chatKeySound);
-						OnBackspace();
-					}
-					break;
-				}
-			}
-		}
-		return true;
-	}
-
     bool OnChar(const KeyState& ks)
     {
         if (m_csComposeState > c_csComposeMouseCommand)
@@ -2448,7 +2348,7 @@ public:
                 switch (ks.vk)
                 {
                     case VK_RETURN:
-                        if (m_strTypedText.IsEmpty() && (m_cidVerb < c_cidStop)) //#319 added && (m_cidVerb < c_cidStop)
+                        if (m_strTypedText.IsEmpty())
                         {
                             QuitComposing();
                         }
@@ -2486,11 +2386,9 @@ public:
 
                     case '!':
                     {
-                        //Turkey 5/11 #59 changed to use m_cursorPosition instead of m_strTypedText.GetLength()
-						if ((m_csComposeState == c_csComposeChat) && m_cursorPosition == 0)
+                        if ((m_csComposeState == c_csComposeChat) && m_strTypedText.IsEmpty())
                         {
-							m_strTypedText = ZString("!") + m_strTypedText;
-							m_cursorPosition = 1;
+                            m_strTypedText = ZString("!");
                             SetComposeState(c_csComposeShell);
                             UpdateComposedChat();
                             break;
@@ -2695,21 +2593,25 @@ public:
     {
         assert (m_csComposeState > c_csComposeMouseCommand);
 
-        if (m_cursorPosition != 0) //Turkey 5/11 #59 changed to use m_cursorPosition instead of m_strTypedText.GetLength(), and allowed the compose state to change without deleting the string
+        if (m_strTypedText.GetLength() != 0)
         {
-            if ((m_csComposeState == c_csComposeShell) && (m_cursorPosition == 1)) SetComposeState(c_csComposeChat);
-            
-			m_strTypedText = m_strTypedText.LeftOf(m_strTypedText.GetLength() - m_cursorPosition + 1) + m_strTypedText.RightOf(m_cursorPosition);//Turkey 5/11 #59 delete to the left of the cursor
-			m_cursorPosition--;
+            if ((m_csComposeState == c_csComposeShell) && (m_strTypedText.GetLength() == 1))
+            {
+                m_strTypedText.SetEmpty();
+                SetComposeState(c_csComposeChat);
+            }
+            else
+            {
+                m_strTypedText = m_strTypedText.LeftOf(1);
                 if (m_csComposeState == c_csComposeCommand)
                     MatchTarget();
+            }
             UpdateComposedChat();                
         }
         else if (m_csComposeState == c_csComposeCommand)
         {
             SetComposeState(c_csComposeChat);
             SetChatObject(NULL);
-			SetVerb(c_cidNone); //#319
         }
     }
 
@@ -3053,7 +2955,6 @@ public:
 														//OutputDebugString("In OnTab() Calling SetVerb() and returning scoreBest= "+ZString(scoreBest)+"\n");
 	                                                    SetChatObject(NULL);
 	                                                    m_strTypedText.SetEmpty();
-														m_cursorPosition = 0; //09/12 #332
 	                                                    UpdateComposedChat();
 
 	                                                    return;
@@ -3072,7 +2973,6 @@ public:
                 {
                     SetChatObject(NULL);
                     m_strTypedText.SetEmpty();
-					m_cursorPosition = 0; //09/12 #332
                     m_pchsCurrent->SetRecipient(ct, oidRecipient, pbaseRecipient);
 					//OutputDebugString("In OnTab() Calling SetRecipient() scoreBest= "+ZString(scoreBest)+"\n");
                 }
@@ -3094,9 +2994,7 @@ public:
 		// yp your_persona march 24 2005: constrain chat messages to always fit in the buffer size 255
 		if (m_strTypedText.GetLength() < 255)
 		{
-			//Turkey 5/11 #59 changed to insert the char to the left of the cursor
-			m_strTypedText = m_strTypedText.LeftOf(m_strTypedText.GetLength() - m_cursorPosition) + ZString(ch, 1) + m_strTypedText.RightOf(m_cursorPosition);
-			m_cursorPosition++;
+			m_strTypedText += ZString(ch, 1);
 		}   
 
         if (m_csComposeState == c_csComposeCommand)
@@ -3297,7 +3195,6 @@ private:
     TRef<ConsolePickImage>              m_pickimage;
 
     char                         m_szFileName[c_cbFileName];
-	int							 m_nStyleHud;				// #294
     
 
 public:
@@ -3305,7 +3202,6 @@ public:
         ConsoleImage(pengine, pviewport)
     {
         m_szFileName[0] = '\0';
-		m_nStyleHud = NA;
         SetDisplayMDL("dialog");
     }
 
@@ -3360,7 +3256,7 @@ public:
 
     void SetOverlayFlags(OverlayMask om)
     {
-        if (m_pickimage && GetOverlayFlags() != om) // turkey #294 added check for pickimage to exist
+        if (GetOverlayFlags() != om)
         {
             trekClient.PlaySoundEffect(paneSlideSound);
 
@@ -3404,12 +3300,6 @@ public:
         return m_pconsoleData->IsTakingKeystrokes();
     }
     
-	//Turkey 5/11 #59
-	bool OnKey(const KeyState& ks)
-	{
-		return m_pconsoleData->OnKey(ks);
-	}
-
     bool OnChar(const KeyState& ks)
     {
         return m_pconsoleData->OnChar(ks);
@@ -3433,26 +3323,13 @@ public:
 
     void SetDisplayMDL(const char* pszFileName)
     {
-		if (strcmp(pszFileName, m_szFileName) == 0)
-			return;
-
-		assert(strlen(pszFileName) < c_cbFileName);
-		strcpy(m_szFileName, pszFileName);
-
-		OverlayMask om = GetOverlayFlags();
-
-		/*int styleHud = GetModeler()->GetStyleHud();
-
-        if (strcmp(pszFileName, m_szFileName) == 0 && styleHud == m_nStyleHud)
+        if (strcmp(pszFileName, m_szFileName) == 0)
             return;
 
         assert (strlen(pszFileName) < c_cbFileName);
         strcpy(m_szFileName, pszFileName);
-		m_nStyleHud = styleHud;
 
         OverlayMask om = GetOverlayFlags();
-
-		SetImage(NULL);*/
 
         m_pconsoleData            = NULL;
         m_vpdisplayImages         = NULL;
@@ -3467,7 +3344,7 @@ public:
         m_pgroupDisplays = new GroupImage();
 
 		// BUILD_DX9
-		//GetModeler()->SetColorKeyHint( true );
+		GetModeler()->SetColorKeyHint( true );
 
 		
 		m_pconsoleData   = new ConsoleDataImpl(this->GetViewport(), pszFileName);
@@ -3550,9 +3427,6 @@ public:
         CastTo(pchatListPane, (Pane*)pnsDisplays->FindMember("chatListPane"));
 
         GetWindow()->SetChatListPane(pchatListPane);
-
-		// #294 calling SetDisplayMDL midgame resets the game state container, so it needs to be reinitialized
-		GetWindow()->InitializeGameStateContainer();
 
         // unload the namespace so that the displays will go away when we are 
         // finished with them.

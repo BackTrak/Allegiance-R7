@@ -13,15 +13,8 @@
 #include <zreg.h>
 #include "client.h"
 
-
-// BT - STEAM
-#include "atlenc.h"
-#include "steam_gameserver.h"
-#include <inttypes.h>
-
 ALLOC_MSG_LIST;
 
-//static MprMutex* mutex = new MprMutex();
 CLobbyApp * g_pLobbyApp = NULL;
 
 #ifdef USECLUB
@@ -33,9 +26,6 @@ void CLobbyApp::OnSQLErrorRecord(SSERRORINFO * perror, OLECHAR * postrError)
     perror->pwszProcedure, perror->lNative, perror->wLineNumber, postrError);
 }
 #endif
-
-
-
 
 /*-------------------------------------------------------------------------
  * CLobbyApp.ProcessMsgPump
@@ -51,9 +41,6 @@ bool CLobbyApp::ProcessMsgPump()
   static CTimer timerMsgPump("in message pump", 0.1f);
   timerMsgPump.Start();
   bool fQuit = false;
-
-  // BT - STEAM 
-  SteamGameServer_RunCallbacks();
 
   // Process the message queue, if any messages were received
   MSG msg;
@@ -167,10 +154,6 @@ CLobbyApp::CLobbyApp(ILobbyAppSite * plas) :
 {
   assert(m_plas);
   m_plas->LogEvent(EVENTLOG_INFORMATION_TYPE, LE_Creating);
-  
-  
-  
-
 
 #ifdef USECLUB
   m_strSQLConfig.Empty();
@@ -423,24 +406,6 @@ int CLobbyApp::Run()
   DWORD dwSleep = c_dwUpdateInterval;
   DWORD dwWait = WAIT_TIMEOUT;
 
-
-  // BT - STEAM
-  uint32 unIP = INADDR_ANY;
-  uint32 steamAuthenticationPort = 8766;
-  uint32 gamePort = 27015; // We will manage our own network communications with game clients, so this will not be used directly by us.
-  uint32 masterUpdaterPort = 27016;
-  EServerMode eMode = eServerModeAuthenticationAndSecure;
-  const char *lobbyVersion = "1.0.0.4";
-
-  if (SteamGameServer_Init(unIP, steamAuthenticationPort, gamePort, masterUpdaterPort, eMode, lobbyVersion) == false)
-  {
-	  printf("failed on steam server init.\n");
-  }
-  else
-  {
-	  SteamGameServer()->LogOnAnonymous();
-  }
-
   m_plas->LogEvent(EVENTLOG_INFORMATION_TYPE, LE_Running);
   _putts("---------Press Q to exit---------");
    printf("Ready for clients/servers.\n");
@@ -480,9 +445,6 @@ int CLobbyApp::Run()
 				iterCnxn.Next();
 			}
 		}
-
-		SteamGameServer_Shutdown();
-
       return 0;
 	}
 
@@ -593,105 +555,6 @@ void CLobbyApp::BootPlayersByName(const ZString& strName)
   }
 }
 
-void CLobbyApp::AddAuthorizingPlayerByPlayerIdentifier(const ZString &strPlayerIdentifier, void * data)
-{
-	m_playersByPlayerIdentifier.insert(PlayersBySteamIdentifier::value_type(strPlayerIdentifier, data));
-}
-
-
-void CLobbyApp::RemoveAuthorizingPlayerByPlayerIdentifier(const ZString &strPlayerIdentifier)
-{
-	m_playersByPlayerIdentifier.erase(strPlayerIdentifier);
-}
-
-ZString CLobbyApp::GetPlayerIdentifierFromCDKeyString(char * cdKey)
-{
-	ZString strCdKey = cdKey;
-	ZString playerIdentifier = strCdKey.LeftOf(":");
-
-	return playerIdentifier;
-}
-
-bool CLobbyApp::IsPlayerWaitingForAuthorization(const  ZString &strPlayerIdentifier)
-{
-	PlayersBySteamIdentifier::iterator iterPlayerBySteamID = m_playersByPlayerIdentifier.find(strPlayerIdentifier);
-	bool foundPlayer = false;
-
-	// if we think that player is already logged on...
-	while (iterPlayerBySteamID != m_playersByPlayerIdentifier.end()
-		&& (*iterPlayerBySteamID).first == strPlayerIdentifier)
-	{
-		foundPlayer = true;
-
-		iterPlayerBySteamID++;
-	}
-
-	return foundPlayer;
-}
-
-bool CLobbyApp::BootPlayerFromLobbyByPlayerIdentifier(const ZString &strPlayerIdentifier, const ZString &bootReason)
-{
-	PlayersBySteamIdentifier::iterator iterPlayerBySteamID = m_playersByPlayerIdentifier.find(strPlayerIdentifier);
-	bool foundPlayer = false;
-
-	// if we think that player is already logged on...
-	while (iterPlayerBySteamID != m_playersByPlayerIdentifier.end()
-		&& (*iterPlayerBySteamID).first == strPlayerIdentifier)
-	{
-		foundPlayer = true;
-		void * data = (*iterPlayerBySteamID).second;
-
-		CSQLQuery * pQuery = (CSQLQuery *)data;  //use the AZ legacy data & callback
-		CQLobbyLogon * pls = (CQLobbyLogon *)data;
-		CQLobbyLogonData * pqd = pls->GetData();
-
-		char resultMessage[1024];
-
-		//mutex->lock();
-		pqd->fValid = false;
-		pqd->fRetry = false;
-		pqd->szReason = new char[lstrlen(resultMessage) + 1];
-		Strcpy(pqd->szReason, bootReason);
-		//mutex->unlock();
-		
-		PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM)NULL, (LPARAM)pQuery);
-		
-		iterPlayerBySteamID++;
-	}
-
-	RemoveAuthorizingPlayerByPlayerIdentifier(strPlayerIdentifier);
-
-	return foundPlayer;
-}
-
-bool CLobbyApp::AuthorizePlayerToConnectToLobby(const ZString &strPlayerIdentifier)
-{
-	PlayersBySteamIdentifier::iterator iterPlayerBySteamID = m_playersByPlayerIdentifier.find(strPlayerIdentifier);
-	bool foundPlayer = false;
-
-	// if we think that player is already logged on...
-	while (iterPlayerBySteamID != m_playersByPlayerIdentifier.end()
-		&& (*iterPlayerBySteamID).first == strPlayerIdentifier)
-	{
-		foundPlayer = true;
-		void * data = (*iterPlayerBySteamID).second;
-
-		CSQLQuery * pQuery = (CSQLQuery *)data;  //use the AZ legacy data & callback
-		CQLobbyLogon * pls = (CQLobbyLogon *)data;
-		CQLobbyLogonData * pqd = pls->GetData();
-
-		// let the player proceed to connect to the lobby.
-		PostThreadMessage(_Module.dwThreadID, wm_sql_querydone, (WPARAM)NULL, (LPARAM)pQuery);
-
-		iterPlayerBySteamID++;
-	}
-
-	RemoveAuthorizingPlayerByPlayerIdentifier(strPlayerIdentifier);
-
-	return foundPlayer;
-}
-
-
 bool CLobbyApp::BootPlayersByCDKey(const ZString& strCDKey, const ZString& strNameExclude, ZString& strOldPlayer)
 {
   PlayerByCDKey::iterator iterPlayerByCDKey = m_playerByCDKey.find(strCDKey);
@@ -782,7 +645,7 @@ bool CLobbyApp::GetRankForCallsign(const char* szPlayerName, int *rank, double *
 	int resultCode = -1;
 
 	char localRankName[50];
-	if(sscanf(content, "%ld|%ld|%s|%lf|%lf|%ld|%lf|%lf", &resultCode, rank, localRankName, sigma, mu, commandRank, commandSigma, commandMu) == EOF)
+	if(sscanf(content, "%ld|%ld|%s|%f|%f|%ld|%f|%f", &resultCode, rank, localRankName, sigma, mu, commandRank, commandSigma, commandMu) == EOF)
 		resultCode = -1;
 
 	strncpy(rankName, localRankName, rankNameLen);
@@ -799,244 +662,97 @@ bool CLobbyApp::GetRankForCallsign(const char* szPlayerName, int *rank, double *
 	return resultCode == 0;
 }
 
-
 // BT - 9/11/2010 - CD Key check will call back to the lobby service to ensure the authentication token is valid.
-bool CLobbyApp::CDKeyIsValid(const char* szPlayerName, const char* szCDKey, const char* szAddress, char *resultMessage, int resultMessageLength, char * playerIdentifier)
+bool CLobbyApp::CDKeyIsValid(const char* szPlayerName, const char* szCDKey, const char* szAddress, char *resultMessage, int resultMessageLength)
 {
-	// BT - STEAM
-	ZString combinedKey = szCDKey;
-	ZString steamIDString = combinedKey.LeftOf(":");
-	ZString steamTokenString = combinedKey.RightOf(steamIDString.GetLength() + 1);
+	int contentLen = 0; 
+    char *content;
+    char szResponse[MAX_PATH];    
+	char szURL[MPR_HTTP_MAX_URL]; 
+	char szName[c_cbName];
 
-	uint64 steamUID = strtoull(steamIDString, NULL, 0);
-	CSteamID steamID = CSteamID(steamUID);
+	//Orion : 2009 - Retrieve base lobby authentication service URL
+	char* baseUrl = g_pLobbyApp->RetrieveAuthAddress();
 
-	/*char steamIDString[32];
-	uint64 steamUID;
-	char uuencodedAuthTicket[2064];
-
-	strncpy(steamIDString, szCDKey, )
-
-	sscanf(szCDKey, "%s:%s", steamIDString, uuencodedAuthTicket);
-	steamUID = strtoull(steamIDString, NULL, 0);
-	CSteamID steamID = CSteamID(steamUID);*/
-
-	//sprintf(playerIdentifier, "%" PRIu64, steamID.ConvertToUint64());
-
-	strcpy(playerIdentifier, steamIDString);
-
-	char steamAuthTicket[1024];
-	int steamAuthTicketLen = sizeof(steamAuthTicket);
-	char steamAuthTicketEncoded[2064];
-	strcpy(steamAuthTicketEncoded, steamTokenString);
-	UUDecode((BYTE *)steamAuthTicketEncoded, steamTokenString.GetLength(), (BYTE *)steamAuthTicket, &steamAuthTicketLen);
+	Strcpy(szURL, baseUrl);
+ 	
+	Strcat(szURL,"?Callsign=");
+	
+ 	// one thread per connecting player
+ 	Strcpy(szName, szPlayerName);
 
 	
-	EBeginAuthSessionResult result = SteamGameServer()->BeginAuthSession(steamAuthTicket, steamAuthTicketLen, steamID);
-
-	bool returnValue = false;
-
+	// the player callsign has to be urlencoded, because it may contain '+', '?', etc.
+	char callsign[128];
+	char playername[128];
+	Strcpy(playername, szPlayerName);
+	strcpy(callsign, "");
+	encodeURL(callsign, playername);
+	Strcat(szURL, callsign);
 	
-	switch (result)
-	{
-		case k_EBeginAuthSessionResultOK:
-			strcpy(resultMessage, "Authentication In Progress.");
-			returnValue = true;
-			break;
+	// add the IP to the url
+	Strcat(szURL,"&IP=");
+	Strcat(szURL,szAddress);
 
-		case k_EBeginAuthSessionResultInvalidTicket:
-			strcpy(resultMessage, "Couldn't begin authorization: Invalid Ticket.");
-			returnValue = false;
-			break;
+	// add the ticket to the url
+	Strcat(szURL,"&Ticket=");
 
-		case k_EBeginAuthSessionResultDuplicateRequest:
-			strcpy(resultMessage, "Couldn't begin authorization: Duplicate Request.");
-			returnValue = false;
-			break;
+	char cdkey[2048];
+	char escapedCdKey[2048];
 
-		case k_EBeginAuthSessionResultInvalidVersion:
-			strcpy(resultMessage, "Couldn't begin authorization: Invalid Version.");
-			returnValue = false;
-			break;
+	Strcpy(cdkey, szCDKey);
+	strcpy(escapedCdKey, "");
+    encodeURL(escapedCdKey, cdkey); 
+	Strcat(szURL,escapedCdKey);
 
-		case k_EBeginAuthSessionResultGameMismatch:
-			strcpy(resultMessage, "Couldn't begin authorization: Game Mismatch.");
-			returnValue = false;
-			break;
+	// BT - Get rid of the hardcoded reference to the auth url.
+	MaUrl maUrl;
+	maUrl.parse(szURL);
 
-		case k_EBeginAuthSessionResultExpiredTicket:
-			strcpy(resultMessage, "Couldn't begin authorization: Expired Ticket.");
-			returnValue = false;
-			break;
+    // First make sure we can write to a socket
+    MprSocket* socket = new MprSocket();
+	socket->openClient(maUrl.host, maUrl.port, 0); // BT - Get rid of the hardcoded reference to the auth url.
+    int iwrite = socket->_write("GET /\r\n");
+    delete socket;
 
-		default:
-			sprintf(resultMessage, "Couldn't begin authorization: unknown error code returned: %ld", result);
-			returnValue = false;
-			break;
-	}
+    MaClient* client = new MaClient();
+    client->setTimeout(3000);
+    client->setRetries(1);
+    client->setKeepAlive(0);
+
+	bool succeeded = false;
+	strcpy(resultMessage, "Authentication Failure.\n\nPlease restart the game using the Authentication System.");
+
+	// make sure we wrote 7 bytes
+    if (iwrite == 7) 
+	{ 
+		debugf("authenticating: %s\r\n", szURL);
+
+        client->getRequest(szURL);
+        if (client->getResponseCode() == 200) // check for HTTP OK 8/3/08
+	        content = client->getResponseContent(&contentLen);
+		else
+		{
+			char msg[1024];
+			sprintf(resultMessage, "Lobby Verification Service Failed (%i)", client->getResponseCode());
+			
+		}
+    }
+
+	debugf("CDKeyIsValid(): contentLen = %ld, content = %s\r\n", contentLen, content);
 	
-
-	return returnValue;
-
-	//int contentLen = 0; 
- //   char *content;
- //   char szResponse[MAX_PATH];    
-	//char szURL[MPR_HTTP_MAX_URL]; 
-	//char szName[c_cbName];
-
-	////Orion : 2009 - Retrieve base lobby authentication service URL
-	//char* baseUrl = g_pLobbyApp->RetrieveAuthAddress();
-
-	//Strcpy(szURL, baseUrl);
- //	
-	//Strcat(szURL,"?Callsign=");
-	//
- //	// one thread per connecting player
- //	Strcpy(szName, szPlayerName);
-
-	//
-	//// the player callsign has to be urlencoded, because it may contain '+', '?', etc.
-	//char callsign[128];
-	//char playername[128];
-	//Strcpy(playername, szPlayerName);
-	//strcpy(callsign, "");
-	//encodeURL(callsign, playername);
-	//Strcat(szURL, callsign);
-	//
-	//// add the IP to the url
-	//Strcat(szURL,"&IP=");
-	//Strcat(szURL,szAddress);
-
-	//// add the ticket to the url
-	//Strcat(szURL,"&Ticket=");
-
-	//char cdkey[2048];
-	//char escapedCdKey[2048];
-
-	//Strcpy(cdkey, szCDKey);
-	//strcpy(escapedCdKey, "");
- //   encodeURL(escapedCdKey, cdkey); 
-	//Strcat(szURL,escapedCdKey);
-
-	//// BT - Get rid of the hardcoded reference to the auth url.
-	//MaUrl maUrl;
-	//maUrl.parse(szURL);
-
- //   // First make sure we can write to a socket
- //   MprSocket* socket = new MprSocket();
-	//socket->openClient(maUrl.host, maUrl.port, 0); // BT - Get rid of the hardcoded reference to the auth url.
- //   int iwrite = socket->_write("GET /\r\n");
- //   delete socket;
-
- //   MaClient* client = new MaClient();
- //   client->setTimeout(3000);
- //   client->setRetries(1);
- //   client->setKeepAlive(0);
-
-	//bool succeeded = false;
-	//strcpy(resultMessage, "Authentication Failure.\n\nPlease restart the game using the Authentication System.");
-
-	//// make sure we wrote 7 bytes
- //   if (iwrite == 7) 
-	//{ 
-	//	debugf("authenticating: %s\r\n", szURL);
-
- //       client->getRequest(szURL);
- //       if (client->getResponseCode() == 200) // check for HTTP OK 8/3/08
-	//        content = client->getResponseContent(&contentLen);
-	//	else
-	//	{
-	//		char msg[1024];
-	//		sprintf(resultMessage, "Lobby Verification Service Failed (%i)", client->getResponseCode());
-	//		
-	//	}
- //   }
-
-	//debugf("CDKeyIsValid(): contentLen = %ld, content = %s\r\n", contentLen, content);
-	//
-	//if (contentLen > 0 && (Strcmp(content, "1") == 0)) { // there's POSITIVE content, we expect it a certain way...
-	//	succeeded = true;
-	//}
-
-	//// Delete this only after you are done with the content that came back from client->getResponseContent, or that 
-	//// pointer will get fried.
-	//delete client;
-
-	//if(succeeded == true)
-	//	strcpy(resultMessage, "Authentication Succeeded.");
-
-	//return succeeded;
-}
-
-
-// BT - STEAM
-void CLobbyApp::OnValidateAuthTicketResponse(ValidateAuthTicketResponse_t *pResponse)
-{
-	char steamID[64];
-	sprintf(steamID, "%" PRIu64, pResponse->m_SteamID.ConvertToUint64());
-
-	ZString strSteamID = steamID;
-
-	ZString responseText;
-
-	switch (pResponse->m_eAuthSessionResponse)
-	{
-		case k_EAuthSessionResponseOK:
-			responseText = "Steam has verified the user is online, the ticket is valid and ticket has not been reused.";
-			break;
-
-		case k_EAuthSessionResponseUserNotConnectedToSteam:
-			responseText = "The user in question is not connected to steam.";
-			break;
-
-		case k_EAuthSessionResponseNoLicenseOrExpired:
-			responseText = "The license has expired.";
-			break;
-
-		case k_EAuthSessionResponseVACBanned:
-			responseText = "The user is VAC banned for this game.";
-			break;
-
-		case k_EAuthSessionResponseLoggedInElseWhere:
-			responseText = "The user account has logged in elsewhere and the session containing the game instance has been disconnected.";
-			break;
-
-		case k_EAuthSessionResponseVACCheckTimedOut:
-			responseText = "VAC has been unable to perform anti-cheat checks on this user";
-			break;
-
-		case k_EAuthSessionResponseAuthTicketCanceled:
-			responseText = "The ticket has been canceled by the issuer";
-			break;
-
-		case k_EAuthSessionResponseAuthTicketInvalidAlreadyUsed:
-			responseText = "This ticket has already been used, it is not valid.";
-			break;
-
-		case k_EAuthSessionResponseAuthTicketInvalid:
-			responseText = "This ticket is not from a user instance currently connected to steam.";
-			break;
-
-		case k_EAuthSessionResponsePublisherIssuedBan:
-			responseText = "The user is banned for this game. The ban came via the web api and not VAC.";
-			break;
-
-		default:
-			responseText = "Unknown response code: " + ZString((int)pResponse->m_eAuthSessionResponse);
-			break;
+	if (contentLen > 0 && (Strcmp(content, "1") == 0)) { // there's POSITIVE content, we expect it a certain way...
+		succeeded = true;
 	}
 
-	printf("Steam Validation Response Received for steamID: %s, response code: %ld - %s\n", (PCC) strSteamID, pResponse->m_eAuthSessionResponse, (PCC) responseText);
+	// Delete this only after you are done with the content that came back from client->getResponseContent, or that 
+	// pointer will get fried.
+	delete client;
 
-	if (pResponse->m_eAuthSessionResponse != k_EAuthSessionResponseOK)
-	{
-		BootPlayersByCDKey(strSteamID);
-		BootPlayerFromLobbyByPlayerIdentifier(strSteamID, responseText);
-	}
-	else
-	{
-		AuthorizePlayerToConnectToLobby(strSteamID);
-	}
+	if(succeeded == true)
+		strcpy(resultMessage, "Authentication Succeeded.");
+
+	return succeeded;
 }
 
 
@@ -1048,7 +764,6 @@ void CLobbyApp::SetPlayerMission(const char* szPlayerName, const char* szCDKey, 
   ZString strPlayerName = szPlayerName;
   ZString strCDKey = szCDKey;
   ZString strAddress = szAddress;
-  ZString strPlayerIdentifier = szCDKey;
 
   // boot any old copies of this player
 #ifdef USECLUB
@@ -1060,15 +775,10 @@ void CLobbyApp::SetPlayerMission(const char* szPlayerName, const char* szCDKey, 
 	  // BT - 9/11/2010 - Readding CD Key Auth on player join to the Allegiance server.
 	int resultMessageLength = 1024;
 	char resultMessage[1024];
-	
-	// BT - STEAM
-	char playerIdentifier[64];
 
 	debugf("SetPlayerMission(): checking valid key for: %s, cdKey: %s, IP: %s\r\n", szPlayerName, szCDKey, szAddress);
 
-	bool cdKeyIsValid = CDKeyIsValid(szPlayerName, szCDKey, szAddress, resultMessage, resultMessageLength, playerIdentifier);
-
-	strPlayerIdentifier = playerIdentifier;
+	bool cdKeyIsValid = CDKeyIsValid(szPlayerName, szCDKey, szAddress, resultMessage, resultMessageLength);
 
 	debugf("SetPlayerMission(): keycheck for: %s, key: %s, address: %s, result: %s, succeeded: %s\r\n", szPlayerName, szCDKey, szAddress, resultMessage, (cdKeyIsValid == true) ? "true" : "false");
 
@@ -1089,7 +799,7 @@ void CLobbyApp::SetPlayerMission(const char* szPlayerName, const char* szCDKey, 
 	{
 		ZString strOldPlayer;
 
-		if (BootPlayersByCDKey(strPlayerIdentifier, szPlayerName, strOldPlayer))
+		if (BootPlayersByCDKey(strCDKey, szPlayerName, strOldPlayer))
 		{
 		  BEGIN_PFM_CREATE(m_fmServers, pfmRemovePlayer, L, REMOVE_PLAYER)
 			FM_VAR_PARM(szPlayerName, CB_ZTS)
@@ -1105,7 +815,7 @@ void CLobbyApp::SetPlayerMission(const char* szPlayerName, const char* szCDKey, 
 
   // create a new player by creating entries in the maps
   PlayerByCDKey::iterator iterPlayerByCDKey = 
-      m_playerByCDKey.insert(PlayerByCDKey::value_type(strPlayerIdentifier, PlayerLocInfo(strPlayerName, pMission)));
+      m_playerByCDKey.insert(PlayerByCDKey::value_type(strCDKey, PlayerLocInfo(strPlayerName, pMission)));
   m_playerByName.insert(PlayerByName::value_type(strPlayerName, iterPlayerByCDKey));
 
   pMission->AddPlayer();

@@ -20,8 +20,8 @@ public:
     virtual bool GetEnabled()  = 0;
 
     virtual IEventSource* GetEventSource() = 0;
-    virtual IEventSource* GetDoubleClickEventSource() = 0;
 	virtual IEventSource* GetRightEventSource() = 0;
+    virtual IEventSource* GetDoubleClickEventSource() = 0;
     virtual IEventSource* GetMouseEnterEventSource() = 0;
     virtual IEventSource* GetMouseLeaveEventSource() = 0;
     virtual IEventSource* GetMouseEnterWhileEnabledEventSource() = 0;

@@ -392,7 +392,7 @@ FunctionEnd
 ; Initailisation of installer
 Function .onInit
   ; Download page for Artwork files
-  StrCpy $url "https://github.com/FreeAllegiance/Artwork/releases/download/1.4.0"
+  StrCpy $url "http://github.com/FreeAllegiance/Artwork/releases/download/1.3.1/"
 
   Call WindowsVersionCheck
 FunctionEnd

@@ -57,7 +57,8 @@
     <Content Include="Resources\Bitmaps\splash.bmp" />
     <Content Include="Resources\DirectX\dxwebsetup.exe" />
     <Content Include="Resources\NetFX35\dotnetfx35setup.exe" />
-    <Content Include="Resources\VC15\vc_redist.x86.exe" />
+    <Content Include="Resources\VC10\vcredist_x86.exe" />
+    <Content Include="Resources\VC13\vcredist_x86.exe" />
     <Content Include="todo.txt" />
     <Content Include="UsedPlugins.txt" />
   </ItemGroup>
